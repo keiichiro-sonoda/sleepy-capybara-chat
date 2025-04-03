@@ -3,6 +3,9 @@ name = "sleepy-capybara-chat-backend"
 version = "0.1.0"
 description = "Backend for Sleepy Capybara Chat"
 authors = ["Your Name <your.email@example.com>"]
+packages = [
+    { include = "app" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.13"
@@ -15,6 +18,8 @@ passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-multipart = "^0.0.6"
 pydantic = "^2.6.0"
 httpx = "^0.26.0"
+pydantic-settings = "^2.1.0"
+email-validator = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"

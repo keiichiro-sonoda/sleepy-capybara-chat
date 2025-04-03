@@ -94,7 +94,7 @@ sleepy-capybara-chat/
 ## 技術スタック
 
 - フロントエンド: Next.js, React, TypeScript, TailwindCSS
-- バックエンド: FastAPI, Python 3.11+
+- バックエンド: FastAPI, Python 3.13+
 - データベース: PostgreSQL
 - AI/LLM: Ollama API
 - コンテナ化: Docker, Docker Compose
