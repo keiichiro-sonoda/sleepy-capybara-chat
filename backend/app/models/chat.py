@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
 
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
@@ -16,6 +17,7 @@ class ChatSession(Base):
     messages = relationship("Message", back_populates="chat_session")
     user = relationship("User", back_populates="chat_sessions")
 
+
 class Message(Base):
     __tablename__ = "messages"
 
@@ -26,4 +28,4 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # リレーションシップ
-    chat_session = relationship("ChatSession", back_populates="messages") 
+    chat_session = relationship("ChatSession", back_populates="messages")

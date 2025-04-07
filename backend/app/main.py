@@ -14,8 +14,7 @@ settings = get_settings()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
 # CORSミドルウェアの設定
@@ -31,6 +30,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
 
+
 @app.get("/")
-async def root():
-    return {"message": "Welcome to Sleepy Capybara Chat API"} 
+async def root() -> dict[str, str]:
+    return {"message": "Welcome to Sleepy Capybara Chat API"}

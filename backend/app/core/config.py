@@ -1,5 +1,3 @@
-from typing import List
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -10,19 +8,19 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # データベース設定
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgrespassword"
+    POSTGRES_DB: str = "capybara_chat"
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: int = 5432
 
     # JWT設定
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEY: str = "dev_secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # CORS設定
-    CORS_ORIGINS: List[str]
+    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # Ollama設定
     OLLAMA_API_BASE_URL: str = "http://ollama:11434"

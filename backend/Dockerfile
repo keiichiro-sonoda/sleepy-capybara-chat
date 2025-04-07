@@ -16,5 +16,8 @@ RUN if [ -f pyproject.toml ]; then poetry install --no-root; fi
 # アプリケーションコードをコピー
 COPY app app/
 
+# mypyで型チェックを実行
+RUN poetry run mypy app/
+
 # uvicornのサーバーを立ち上げる
 ENTRYPOINT ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]
