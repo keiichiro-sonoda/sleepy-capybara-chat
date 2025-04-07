@@ -16,19 +16,20 @@ psycopg2-binary = "^2.9.9"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-multipart = "^0.0.6"
-pydantic = "^2.6.0"
+pydantic = "^2.11.0"
 httpx = "^0.26.0"
-pydantic-settings = "^2.1.0"
+pydantic-settings = "^2.2.1"
 email-validator = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.4"
+pytest = "^8.3.5"
 black = "^24.1.1"
 isort = "^5.13.2"
 flake8 = "^7.0.0"
 mypy = "^1.15.0"
 types-python-jose = "^3.4.0.20250224"
 types-passlib = "^1.7.7.20250401"
+sqlalchemy-utils = "^0.41.2"
 
 [tool.mypy]
 python_version = "3.13"

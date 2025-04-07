@@ -29,7 +29,10 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # Pydantic v2の新しい設定方法
+    model_config = SettingsConfigDict(
+        env_file=".env", case_sensitive=True, extra="ignore"
+    )
 
 
 @lru_cache()

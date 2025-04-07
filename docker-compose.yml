@@ -30,7 +30,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/app:/app/app
+      - ./backend/app:/src/app
+      - ./backend/tests:/src/tests
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgrespassword
@@ -39,6 +40,8 @@ services:
       - POSTGRES_PORT=5432
       - JWT_SECRET_KEY=dev_secret_key
       - CORS_ORIGINS=["http://localhost:3000"]
+      - PYTEST_ADDOPTS="-v"
+      - PYTHONPATH=/src
     depends_on:
       - db
 
