@@ -41,7 +41,24 @@ CORS_ORIGINS=["http://localhost:3000"]
 docker compose up --build
 ```
 
-### 4. 開発サーバーの起動
+### 4. Ollamaのセットアップ
+
+チャット機能を使用するには、Ollamaコンテナ内に言語モデルをインストールする必要があります。
+以下のコマンドを実行して、必要なモデルをダウンロードしてください：
+
+```bash
+# 利用可能なモデルの一覧を表示
+docker compose exec ollama ollama list
+
+# モデルのダウンロード（例：llama3）
+docker compose exec ollama ollama pull llama3
+```
+
+注意：
+- モデルのダウンロードには時間がかかる場合があります（モデルサイズによって数分から数十分）
+- 初回のチャットリクエスト時は、モデルのロードに時間がかかる場合があります
+
+### 5. 開発サーバーの起動
 
 #### フロントエンド（Next.js）
 
@@ -59,7 +76,7 @@ poetry install
 poetry run uvicorn main:app --reload
 ```
 
-### 5. アクセス方法
+### 6. アクセス方法
 
 - フロントエンド: http://localhost:3000
 - バックエンドAPI: http://localhost:8000

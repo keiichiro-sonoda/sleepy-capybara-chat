@@ -44,6 +44,7 @@ services:
       - PYTHONPATH=/src
     depends_on:
       - db
+      - ollama
 
   ollama:
     image: ollama/ollama:latest

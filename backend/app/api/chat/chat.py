@@ -62,7 +62,7 @@ async def create_message(
     db.commit()
 
     # Ollama APIへのリクエスト
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             f"{settings.OLLAMA_API_BASE_URL}/api/generate",
             json={
@@ -74,7 +74,7 @@ async def create_message(
         if response.status_code != 200:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to get response from Ollama",
+                detail=f"Failed to get response from Ollama: {response.status_code} {response.text}",
             )
 
         ai_response = response.json()["response"]
