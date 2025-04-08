@@ -29,20 +29,34 @@ async def register(user: UserCreate, db: Session = Depends(get_db)) -> User:
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # ユーザー作成（is_verified=False）
-    hashed_password = get_password_hash(user.password)
-    db_user = User(email=user.email, hashed_password=hashed_password, is_verified=False)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    try:
+        # トランザクション開始
+        # ユーザー作成（is_verified=False）
+        hashed_password = get_password_hash(user.password)
+        db_user = User(
+            email=user.email, hashed_password=hashed_password, is_verified=False
+        )
+        db.add(db_user)
+        db.flush()  # コミットせずにDBに反映（IDを取得するため）
 
-    # 確認トークン生成・保存
-    token = set_verification_token(db, db_user)
+        # 確認トークン生成・保存
+        token = set_verification_token(db, db_user)
 
-    # 確認メール送信
-    await send_verification_mail(user.email, token)
+        # 確認メール送信
+        await send_verification_mail(user.email, token)
 
-    return db_user
+        # すべて成功したらコミット
+        db.commit()
+
+        return db_user
+
+    except Exception as e:
+        # エラーが発生した場合はロールバック
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"User registration failed: {str(e)}",
+        )
 
 
 @router.post("/verify-email")
