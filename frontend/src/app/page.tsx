@@ -1,54 +1,113 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import axios from 'axios';
 import Image from "next/image";
 
 export default function Home() {
+  const router = useRouter();
+  const [user, setUser] = useState<{ email: string; is_verified: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+        const response = await axios.get(`${apiUrl}/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        setUser(response.data);
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        localStorage.removeItem('token'); // トークンが無効な場合は削除
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    router.push('/auth/login');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+        <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md">
+          {user ? (
+            <div className="space-y-6">
+              <div className="bg-blue-50 p-6 rounded-lg">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                  ようこそ、{user.email}さん！
+                </h1>
+                <p className="text-gray-600 mb-4">
+                  AIチャットアプリでの会話を始めましょう
+                </p>
+                <Link
+                  href="/chat"
+                  className="inline-block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  チャットを始める
+                </Link>
+              </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-gray-600 hover:text-gray-800 underline"
+                >
+                  ログアウト
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center space-y-6">
+              <h1 className="text-2xl font-bold text-gray-900">
+                AIチャットアプリへようこそ
+              </h1>
+              <p className="text-gray-600">
+                AIとの会話を始めるには、ログインしてください
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  href="/auth/login"
+                  className="inline-block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  ログイン
+                </Link>
+                <Link
+                  href="/auth/register"
+                  className="inline-block bg-white border border-blue-600 text-blue-600 px-6 py-3 rounded-md hover:bg-blue-50 transition-colors"
+                >
+                  新規登録
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
