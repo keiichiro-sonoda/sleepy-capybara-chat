@@ -3,10 +3,12 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import axios from 'axios';
+import { loginWithCredentials } from '@/utils/api';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -18,28 +20,16 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+      const { access_token } = await loginWithCredentials(email, password);
 
-      // FormDataオブジェクトを作成してフォームデータを送信
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-
-      const response = await axios.post(`${apiUrl}/v1/auth/login`, formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-
-      // トークンを保存
-      const { access_token } = response.data;
-      localStorage.setItem('token', access_token);
+      // 認証状態を更新し、トークンを保存
+      login(access_token);
 
       // チャットページにリダイレクト
       router.push('/chat');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      if (axios.isAxiosError(error) && error.response) {
+      if (error.response) {
         // APIからのエラーメッセージを抽出
         const errorDetail = error.response.data.detail;
 

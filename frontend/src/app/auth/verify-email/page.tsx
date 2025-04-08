@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import axios from 'axios'; // axiosをインストール: npm install axios or yarn add axios
+import { getApiUrl } from '@/utils/api';
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -21,29 +21,34 @@ function VerifyEmailContent() {
     const verifyEmail = async () => {
       setStatus('verifying');
       try {
-        // 環境変数からAPI URLを取得
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'; // デフォルト値
+        // 共通関数を使用してAPI URLを取得
+        const apiUrl = getApiUrl();
         console.log(`Verifying token: ${token} with API: ${apiUrl}/v1/auth/verify-email`); // デバッグログ
 
-        await axios.post(`${apiUrl}/v1/auth/verify-email`, null, { // POSTリクエストに変更、データは不要
-          params: { token } // トークンをクエリパラメータとして送信
+        const response = await fetch(`${apiUrl}/v1/auth/verify-email?token=${token}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'メール認証に失敗しました');
+        }
+
         console.log("Verification successful"); // デバッグログ
         setStatus('success');
 
         // 3秒後にログインページへリダイレクト
         setTimeout(() => {
-          router.push('/auth/login'); // ログインページのパスに合わせて変更
+          router.push('/auth/login');
         }, 3000);
 
-      } catch (error: unknown) {
+      } catch (error: any) {
         console.error('Email verification failed:', error); // デバッグログ
         setStatus('error');
-        if (axios.isAxiosError(error) && error.response) {
-          setErrorMessage(error.response.data.detail || 'メールアドレスの確認に失敗しました。トークンが無効か期限切れの可能性があります。');
-        } else {
-          setErrorMessage('メールアドレスの確認中に予期せぬエラーが発生しました。');
-        }
+        setErrorMessage(error.message || 'メールアドレスの確認中に予期せぬエラーが発生しました。');
       }
     };
 
@@ -81,7 +86,7 @@ function VerifyEmailContent() {
             <p className="font-semibold">確認に失敗しました</p>
             <p className="mt-2 text-sm">{errorMessage}</p>
             <button
-              onClick={() => router.push('/auth/register')} // 登録ページのパスに合わせて変更
+              onClick={() => router.push('/auth/register')}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-200"
             >
               登録ページに戻る

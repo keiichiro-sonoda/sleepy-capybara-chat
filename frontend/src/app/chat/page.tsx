@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { useAuth } from '@/hooks/useAuth';
 
 type Message = {
   id: string;
@@ -11,42 +12,14 @@ type Message = {
   timestamp: Date;
 };
 
-export default function ChatPage() {
+function ChatContent() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<{ email: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // ログイン状態の確認
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/auth/login');
-      return;
-    }
-
-    const fetchUserData = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-        const response = await axios.get(`${apiUrl}/v1/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        setUser(response.data);
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        localStorage.removeItem('token');
-        router.push('/auth/login');
-      }
-    };
-
-    fetchUserData();
-  }, [router]);
 
   // 新しいメッセージが追加されたら一番下にスクロール
   useEffect(() => {
@@ -57,12 +30,6 @@ export default function ChatPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || isLoading) return;
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/auth/login');
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -105,12 +72,21 @@ export default function ChatPage() {
       <header className="bg-white shadow p-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <h1 className="text-xl font-semibold text-gray-800">AIチャット</h1>
-          <button
-            onClick={() => router.push('/')}
-            className="text-gray-600 hover:text-gray-800"
-          >
-            ホームに戻る
-          </button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">{user?.email}</span>
+            <button
+              onClick={() => router.push('/')}
+              className="text-gray-600 hover:text-gray-800"
+            >
+              ホームに戻る
+            </button>
+            <button
+              onClick={logout}
+              className="text-red-600 hover:text-red-800"
+            >
+              ログアウト
+            </button>
+          </div>
         </div>
       </header>
 
@@ -130,8 +106,8 @@ export default function ChatPage() {
               >
                 <div
                   className={`max-w-[80%] rounded-lg p-4 ${message.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                      ? 'bg-blue-600 text-white rounded-br-none'
+                      : 'bg-gray-200 text-gray-800 rounded-bl-none'
                     }`}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -161,8 +137,8 @@ export default function ChatPage() {
             type="submit"
             disabled={isLoading}
             className={`rounded-full p-2 ${isLoading
-              ? 'bg-gray-300 text-gray-500'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-gray-300 text-gray-500'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
           >
             {isLoading ? (
@@ -179,5 +155,14 @@ export default function ChatPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// ProtectedRouteでラップして認証を要求
+export default function ChatPage() {
+  return (
+    <ProtectedRoute>
+      <ChatContent />
+    </ProtectedRoute>
   );
 } 

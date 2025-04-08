@@ -1,52 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import axios from 'axios';
 import Image from "next/image";
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Home() {
-  const router = useRouter();
-  const [user, setUser] = useState<{ email: string; is_verified: boolean } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading, logout } = useAuth();
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-        const response = await axios.get(`${apiUrl}/v1/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        setUser(response.data);
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        localStorage.removeItem('token'); // トークンが無効な場合は削除
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    router.push('/auth/login');
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -77,7 +38,7 @@ export default function Home() {
 
               <div className="flex justify-end">
                 <button
-                  onClick={handleLogout}
+                  onClick={logout}
                   className="text-sm text-gray-600 hover:text-gray-800 underline"
                 >
                   ログアウト
