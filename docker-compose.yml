@@ -14,9 +14,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -34,17 +31,9 @@ services:
     volumes:
       - ./backend/app:/src/app
       - ./backend/tests:/src/tests
-      - ./.env:/src/.env
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgrespassword
-      - POSTGRES_DB=capybara_chat
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - JWT_SECRET_KEY=dev_secret_key
-      - CORS_ORIGINS=["http://localhost:3000"]
-      - PYTEST_ADDOPTS="-v"
-      - PYTHONPATH=/src
+      - ./.env:/src/.env # ルートの.envをマウント
+    env_file:
+      - ./backend/.env # バックエンド固有の.envも読み込み
     depends_on:
       - db
       - ollama
@@ -67,9 +56,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgrespassword
-      - POSTGRES_DB=capybara_chat
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always

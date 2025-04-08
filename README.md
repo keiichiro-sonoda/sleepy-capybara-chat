@@ -19,7 +19,9 @@ cd sleepy-capybara-chat
 
 ### 2. 環境変数の設定
 
-`.env` ファイルを作成し、以下の内容を設定します：
+プロジェクトは複数の環境変数ファイルを使用します：
+
+1. **プロジェクトルート**に`.env`ファイルを作成し、Docker Compose全体の設定を行います：
 
 ```bash
 # PostgreSQL
@@ -33,6 +35,17 @@ JWT_SECRET_KEY=your_jwt_secret_key
 # CORS
 CORS_ORIGINS=["http://localhost:3000"]
 ```
+
+2. **フロントエンド**用の環境変数は`frontend/.env.local`に設定します：
+
+```bash
+# バックエンドAPI接続設定
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+```
+
+3. **バックエンド**固有の設定は`backend/.env`に設定します。
+
+> 詳細な環境変数管理の方針については[環境変数管理ドキュメント](docs/ENV_MANAGEMENT.md)を参照してください。
 
 ### 3. Docker コンテナの起動
 
@@ -90,7 +103,8 @@ sleepy-capybara-chat/
 ├── backend/            # FastAPI バックエンド
 ├── nginx/              # Nginx 設定
 ├── docker-compose.yml  # Docker Compose 設定
-└── .env                # 環境変数
+├── .env                # プロジェクト共通環境変数
+└── docs/               # プロジェクトドキュメント
 ```
 
 ## 開発時の注意点
@@ -103,10 +117,17 @@ sleepy-capybara-chat/
    - コンテナ内のログを確認：`docker-compose logs -f [service_name]`
    - VSCodeのDocker拡張機能を使用すると便利
 
-3. **環境変数**
-   - 開発用：`.env.development`
-   - 本番用：`.env.production`
-   - シークレット情報は`.env`ファイルで管理
+3. **環境変数管理**
+   - 環境変数は用途に応じて適切なファイルに分離して管理
+   - 詳細は[環境変数管理ドキュメント](docs/ENV_MANAGEMENT.md)を参照
+   - フロントエンド用の環境変数は`frontend/.env.local`で設定
+   - バックエンド用の環境変数は`backend/.env`で設定
+   - Docker Compose全体の設定はルートの`.env`で設定
+
+4. **Dockerでのフロントエンド開発**
+   - ホットリロード対応：`CHOKIDAR_USEPOLLING=true`と`WATCHPACK_POLLING=true`を設定
+   - ホスト設定：Next.jsは`-H 0.0.0.0`で実行（詳細は`frontend/DEVELOPMENT.md`を参照）
+   - APIエンドポイント：`NEXT_PUBLIC_API_URL`環境変数でバックエンドへの接続を設定
 
 ## 技術スタック
 
@@ -119,4 +140,4 @@ sleepy-capybara-chat/
 
 ## ライセンス
 
-MIT License 
+MIT License
