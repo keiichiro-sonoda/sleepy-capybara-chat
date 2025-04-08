@@ -32,6 +32,7 @@ services:
     volumes:
       - ./backend/app:/src/app
       - ./backend/tests:/src/tests
+      - ./.env:/src/.env
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgrespassword
@@ -45,6 +46,7 @@ services:
     depends_on:
       - db
       - ollama
+      - mailhog
 
   ollama:
     image: ollama/ollama:latest
@@ -69,6 +71,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"  # SMTP port
+      - "8025:8025"  # Web UI (ブラウザでメール確認可能)
 
 volumes:
   postgres_data:

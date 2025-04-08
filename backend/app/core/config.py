@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     # Ollama設定
     OLLAMA_API_BASE_URL: str = "http://ollama:11434"
 
+    # メール設定
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = ""
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = ""
+    MAIL_SSL_TLS: bool = False
+    MAIL_STARTTLS: bool = True
+    FRONTEND_URL: str = "http://localhost:3000"
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
