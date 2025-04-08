@@ -16,6 +16,10 @@ RUN if [ -f pyproject.toml ]; then poetry install --no-root; fi
 # アプリケーションコードをコピー
 COPY app app/
 
+# ★ ここでマイグレーション関連ファイルもコピー
+COPY migrations migrations/
+COPY alembic.ini .
+
 # mypyで型チェックを実行
 RUN poetry run mypy app/
 
