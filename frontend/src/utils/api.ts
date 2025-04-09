@@ -68,3 +68,36 @@ export const loginWithCredentials = async (email: string, password: string) => {
 export const fetchCurrentUser = async (): Promise<User> => {
   return await authGet<User>('/v1/auth/me');
 };
+
+// チャットセッション関連の型定義
+export type ChatSession = {
+  id: number;
+  model_name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatResponse = {
+  response: string;
+  session_id: number;
+};
+
+// 新しいチャットセッションを作成
+export const createChatSession = async (modelName: string = 'llama3'): Promise<ChatSession> => {
+  return await authPost<ChatSession>('/v1/chat/sessions', {
+    model_name: modelName
+  });
+};
+
+// チャットセッション一覧を取得
+export const getChatSessions = async (): Promise<ChatSession[]> => {
+  return await authGet<ChatSession[]>('/v1/chat/sessions');
+};
+
+// メッセージを送信して応答を取得
+export const sendChatMessage = async (sessionId: number, content: string): Promise<ChatResponse> => {
+  return await authPost<ChatResponse>(`/v1/chat/sessions/${sessionId}/messages`, {
+    content,
+    role: "user"
+  });
+};
