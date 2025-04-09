@@ -12,9 +12,10 @@ type ChatMessagesProps = {
   isLoading: boolean;
   error: string | null;
   sessionName?: string;
+  isNewChat?: boolean;
 };
 
-const ChatMessages = ({ messages, isLoading, error, sessionName }: ChatMessagesProps) => {
+const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = false }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 新しいメッセージが追加されたら一番下にスクロール
@@ -45,7 +46,7 @@ const ChatMessages = ({ messages, isLoading, error, sessionName }: ChatMessagesP
               </>
             ) : (
               <>
-                <p>AIとの会話を始めましょう</p>
+                <p>{isNewChat ? 'AIとの新しい会話を始めましょう' : 'チャット履歴がありません'}</p>
                 <p className="text-sm mt-2">例: 「こんにちは、何か質問があります」</p>
                 {sessionName && <p className="text-xs mt-4 text-gray-400">モデル: {sessionName}</p>}
               </>

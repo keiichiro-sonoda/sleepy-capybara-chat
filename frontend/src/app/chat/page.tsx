@@ -33,6 +33,7 @@ function ChatContent() {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isNewChat, setIsNewChat] = useState(true); // 新規チャットモードかどうか
 
   // セッション一覧を取得
   const fetchSessions = async () => {
@@ -53,11 +54,18 @@ function ChatContent() {
     fetchSessions();
   }, []);
 
+  // 新しいチャットの準備をする（セッションはまだ作成しない）
+  const prepareNewChat = () => {
+    setMessages([]);
+    setCurrentSession(null);
+    setIsNewChat(true);
+    setError(null);
+  };
+
   // 新しいチャットセッションを作成
-  const createNewSession = async () => {
+  const createNewSession = async (): Promise<ChatSession> => {
     try {
       setIsLoading(true);
-      setMessages([]);
       const newSession = await createChatSession();
       setCurrentSession(newSession);
 
@@ -65,9 +73,11 @@ function ChatContent() {
       await fetchSessions();
 
       setError(null);
+      return newSession;
     } catch (err) {
       console.error('Failed to create chat session:', err);
       setError('チャットセッションの作成に失敗しました。もう一度お試しください。');
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -104,13 +114,14 @@ function ChatContent() {
     const selectedSession = sessions.find(s => s.id === sessionId);
     if (selectedSession) {
       setCurrentSession(selectedSession);
+      setIsNewChat(false);
       await loadChatHistory(sessionId);
     }
   };
 
   // メッセージ送信処理
   const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading || !currentSession) return;
+    if (!content.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -124,8 +135,19 @@ function ChatContent() {
     setError(null);
 
     try {
-      // 実際のAPIを使ってメッセージを送信
-      const response = await sendChatMessage(currentSession.id, content);
+      let sessionId = currentSession?.id;
+
+      // 新規チャットモードで、まだセッションがない場合は作成する
+      if (isNewChat && !currentSession) {
+        const newSession = await createChatSession();
+        setCurrentSession(newSession);
+        sessionId = newSession.id;
+        setIsNewChat(false);
+        await fetchSessions();
+      }
+
+      // メッセージを送信
+      const response = await sendChatMessage(sessionId!, content);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -158,7 +180,7 @@ function ChatContent() {
           sessions={sessions}
           currentSessionId={currentSession?.id || null}
           onSessionSelect={handleSessionSelect}
-          onNewChat={createNewSession}
+          onNewChat={prepareNewChat}
           isLoading={loadingSessions || isLoading}
         />
 
@@ -169,12 +191,13 @@ function ChatContent() {
             isLoading={isLoading}
             error={error}
             sessionName={currentSession?.model_name}
+            isNewChat={isNewChat}
           />
 
           <ChatInput
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
-            disabled={!currentSession}
+            disabled={false} // 常に入力可能に設定
           />
         </div>
       </div>
