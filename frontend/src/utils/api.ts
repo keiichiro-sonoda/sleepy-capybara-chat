@@ -82,6 +82,14 @@ export type ChatResponse = {
   session_id: number;
 };
 
+export type ChatMessage = {
+  id: number;
+  session_id: number;
+  role: string;
+  content: string;
+  created_at: string;
+};
+
 // 新しいチャットセッションを作成
 export const createChatSession = async (modelName: string = 'llama3'): Promise<ChatSession> => {
   return await authPost<ChatSession>('/v1/chat/sessions', {
@@ -92,6 +100,11 @@ export const createChatSession = async (modelName: string = 'llama3'): Promise<C
 // チャットセッション一覧を取得
 export const getChatSessions = async (): Promise<ChatSession[]> => {
   return await authGet<ChatSession[]>('/v1/chat/sessions');
+};
+
+// セッションのメッセージ履歴を取得
+export const getChatMessages = async (sessionId: number): Promise<ChatMessage[]> => {
+  return await authGet<ChatMessage[]>(`/v1/chat/sessions/${sessionId}/messages`);
 };
 
 // メッセージを送信して応答を取得

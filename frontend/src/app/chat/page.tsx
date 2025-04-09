@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
-import { createChatSession, sendChatMessage, ChatSession } from '@/utils/api';
+import { createChatSession, sendChatMessage, ChatSession, getChatMessages } from '@/utils/api';
 
 type Message = {
   id: string;
@@ -31,6 +31,10 @@ function ChatContent() {
         setIsLoading(true);
         const newSession = await createChatSession();
         setSession(newSession);
+
+        // セッションのメッセージ履歴を取得
+        await loadChatHistory(newSession.id);
+
         setError(null);
       } catch (err) {
         console.error('Failed to create chat session:', err);
@@ -42,6 +46,26 @@ function ChatContent() {
 
     initSession();
   }, []);
+
+  // チャット履歴を取得する関数
+  const loadChatHistory = async (sessionId: number) => {
+    try {
+      const history = await getChatMessages(sessionId);
+
+      // APIから取得したメッセージを画面表示用の形式に変換
+      const formattedMessages: Message[] = history.map(msg => ({
+        id: msg.id.toString(),
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at)
+      }));
+
+      setMessages(formattedMessages);
+    } catch (err) {
+      console.error('Failed to load chat history:', err);
+      setError('チャット履歴の読み込みに失敗しました。');
+    }
+  };
 
   // 新しいメッセージが追加されたら一番下にスクロール
   useEffect(() => {
