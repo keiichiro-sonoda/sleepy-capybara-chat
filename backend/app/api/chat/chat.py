@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import httpx
@@ -11,8 +12,12 @@ from app.schemas.chat import (
     ChatSessionCreate,
     ChatSession as ChatSessionSchema,
     MessageCreate,
+    Message as MessageSchema,
     ChatResponse,
 )
+
+# ロガーの設定
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 settings = get_settings()
@@ -38,6 +43,34 @@ async def get_chat_sessions(
     return db.query(ChatSession).filter(ChatSession.user_id == current_user.id).all()
 
 
+@router.get("/sessions/{session_id}/messages", response_model=list[MessageSchema])
+async def get_chat_messages(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Message]:
+    # セッションの存在確認と所有権チェック
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.user_id == current_user.id)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
+        )
+
+    # セッションのメッセージを取得
+    messages = (
+        db.query(Message)
+        .filter(Message.session_id == session_id)
+        .order_by(Message.created_at)
+        .all()
+    )
+
+    return messages
+
+
 @router.post("/sessions/{session_id}/messages", response_model=ChatResponse)
 async def create_message(
     session_id: int,
@@ -61,23 +94,43 @@ async def create_message(
     db.add(user_message)
     db.commit()
 
-    # Ollama APIへのリクエスト
+    # 会話履歴を取得（現在のセッションの全メッセージ）
+    chat_history = (
+        db.query(Message)
+        .filter(Message.session_id == session_id)
+        .order_by(Message.created_at)
+        .all()
+    )
+
+    # Ollamaの /api/chat エンドポイント用にメッセージを整形
+    formatted_messages = [
+        {"role": msg.role, "content": msg.content} for msg in chat_history
+    ]
+
+    # リクエストの内容をログ出力
+    request_data = {
+        "model": chat_session.model_name,
+        "messages": formatted_messages,
+        "stream": False,
+    }
+    logger.info(f"Sending request to Ollama API: {request_data}")
+
+    # Ollama APIへのリクエスト（/api/chat エンドポイントを使用）
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
-            f"{settings.OLLAMA_API_BASE_URL}/api/generate",
-            json={
-                "model": chat_session.model_name,
-                "prompt": message.content,
-                "stream": False,
-            },
+            f"{settings.OLLAMA_API_BASE_URL}/api/chat",
+            json=request_data,
         )
         if response.status_code != 200:
+            logger.error(f"Ollama API error: {response.status_code} {response.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get response from Ollama: {response.status_code} {response.text}",
             )
 
-        ai_response = response.json()["response"]
+        response_data = response.json()
+        logger.info(f"Received response from Ollama API: {response_data}")
+        ai_response = response_data["message"]["content"]
 
     # AIのレスポンスを保存
     ai_message = Message(session_id=session_id, role="assistant", content=ai_response)

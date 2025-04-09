@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import logging
+import os
 
 from app.core.config import get_settings
 from app.api.auth import auth
@@ -9,6 +9,14 @@ from app.api.chat import chat
 from app.db.session import Base, engine
 
 settings = get_settings()
+
+# ロギング設定
+log_level = os.environ.get("LOG_LEVEL", "INFO")
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # データベーステーブルの作成
 Base.metadata.create_all(bind=engine)
