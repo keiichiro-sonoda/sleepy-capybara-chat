@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import httpx
 import json
 import asyncio
+import typing
 
 from app.core.config import get_settings
 from app.core.security import get_current_user
@@ -74,13 +75,13 @@ async def get_chat_messages(
     return messages
 
 
-@router.post("/sessions/{session_id}/messages")
+@router.post("/sessions/{session_id}/messages", response_model=None)
 async def create_message(
     session_id: int,
     message: MessageCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> ChatResponse | StreamingResponse:
     # セッションの存在確認
     chat_session = (
         db.query(ChatSession)
@@ -154,7 +155,9 @@ async def create_message(
 
 
 # ストリーミングレスポンスを処理する非同期ジェネレータ
-async def _stream_chat_response(session_id, request_data, ollama_api_base_url, db):
+async def _stream_chat_response(
+    session_id: int, request_data: dict, ollama_api_base_url: str, db: Session
+) -> typing.AsyncGenerator[str, None]:
     # 最終的な完全なAI応答を保持する変数
     complete_response = ""
 
@@ -167,7 +170,7 @@ async def _stream_chat_response(session_id, request_data, ollama_api_base_url, d
         ) as response:
             if response.status_code != 200:
                 error_text = await response.aread()
-                logger.error(f"Ollama API error: {response.status_code} {error_text}")
+                logger.error(f"Ollama API error: {response.status_code} {error_text!r}")
                 yield "data: " + json.dumps(
                     {
                         "event": "error",
