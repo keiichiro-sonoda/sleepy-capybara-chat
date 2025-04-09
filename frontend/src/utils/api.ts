@@ -97,7 +97,7 @@ export const createChatSession = async (modelName: string = 'llama3'): Promise<C
   });
 };
 
-// チャットセッション一覧を取得
+// 全てのチャットセッションを取得
 export const getChatSessions = async (): Promise<ChatSession[]> => {
   return await authGet<ChatSession[]>('/v1/chat/sessions');
 };
