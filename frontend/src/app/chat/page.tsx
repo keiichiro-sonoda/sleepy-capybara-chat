@@ -9,6 +9,7 @@ import {
   sendChatMessage,
   getChatSessions,
   getChatMessages,
+  deleteChatSession,
   ChatSession
 } from '@/utils/api';
 
@@ -119,6 +120,29 @@ function ChatContent() {
     }
   };
 
+  // セッションを削除
+  const handleDeleteSession = async (sessionId: number) => {
+    try {
+      setIsLoading(true);
+      await deleteChatSession(sessionId);
+
+      // 現在表示中のセッションが削除された場合は新規チャットモードに
+      if (currentSession?.id === sessionId) {
+        prepareNewChat();
+      }
+
+      // セッション一覧を更新
+      await fetchSessions();
+
+      setError(null);
+    } catch (err) {
+      console.error('Failed to delete chat session:', err);
+      setError('チャットセッションの削除に失敗しました。もう一度お試しください。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // メッセージ送信処理
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -139,11 +163,9 @@ function ChatContent() {
 
       // 新規チャットモードで、まだセッションがない場合は作成する
       if (isNewChat && !currentSession) {
-        const newSession = await createChatSession();
-        setCurrentSession(newSession);
+        const newSession = await createNewSession();
         sessionId = newSession.id;
         setIsNewChat(false);
-        await fetchSessions();
       }
 
       // メッセージを送信
@@ -180,6 +202,7 @@ function ChatContent() {
           sessions={sessions}
           currentSessionId={currentSession?.id || null}
           onSessionSelect={handleSessionSelect}
+          onDeleteSession={handleDeleteSession}
           onNewChat={prepareNewChat}
           isLoading={loadingSessions || isLoading}
         />

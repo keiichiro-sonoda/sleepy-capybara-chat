@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { ChatSession } from '@/utils/api';
 
 type ChatSidebarProps = {
   sessions: ChatSession[];
   currentSessionId: number | null;
   onSessionSelect: (sessionId: number) => void;
+  onDeleteSession: (sessionId: number) => void;
   onNewChat: () => void;
   isLoading: boolean;
 };
@@ -12,6 +14,7 @@ const ChatSidebar = ({
   sessions,
   currentSessionId,
   onSessionSelect,
+  onDeleteSession,
   onNewChat,
   isLoading
 }: ChatSidebarProps) => {
@@ -47,17 +50,50 @@ const ChatSidebar = ({
             <ul className="space-y-1">
               {sessions.map((session) => (
                 <li key={session.id}>
-                  <button
-                    onClick={() => onSessionSelect(session.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${currentSessionId === session.id
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-300 hover:bg-gray-700'
-                      }`}
-                  >
-                    <div className="flex items-center">
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => onSessionSelect(session.id)}
+                      className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${currentSessionId === session.id
+                          ? 'bg-gray-700 text-white'
+                          : 'text-gray-300 hover:bg-gray-700'
+                        }`}
+                    >
+                      <div className="flex items-center">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 mr-2 opacity-70"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                          />
+                        </svg>
+                        <div className="truncate">
+                          <p className="truncate">
+                            {new Date(session.created_at).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-gray-400">{session.model_name}</p>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm('このチャット履歴を削除してもよろしいですか？')) {
+                          onDeleteSession(session.id);
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-400"
+                      title="削除"
+                    >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 mr-2 opacity-70"
+                        className="h-4 w-4"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -66,17 +102,11 @@ const ChatSidebar = ({
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                         />
                       </svg>
-                      <div className="truncate">
-                        <p className="truncate">
-                          {new Date(session.created_at).toLocaleDateString()}
-                        </p>
-                        <p className="text-xs text-gray-400">{session.model_name}</p>
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

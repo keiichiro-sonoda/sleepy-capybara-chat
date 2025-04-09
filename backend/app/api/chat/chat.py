@@ -138,3 +138,32 @@ async def create_message(
     db.commit()
 
     return ChatResponse(response=ai_response, session_id=session_id)
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chat_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """チャットセッションとそれに関連するすべてのメッセージを削除する"""
+    # セッションの存在確認と所有権チェック
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.user_id == current_user.id)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
+        )
+
+    # 関連するメッセージを削除
+    db.query(Message).filter(Message.session_id == session_id).delete()
+
+    # セッションを削除
+    db.delete(chat_session)
+    db.commit()
+
+    logger.info(f"Deleted chat session: {session_id}")
+    return None

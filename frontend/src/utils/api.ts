@@ -49,6 +49,19 @@ export const authPost = async <T>(url: string, data?: any, config?: AxiosRequest
   return response.data;
 };
 
+// 認証が必要なDELETEリクエスト
+export const authDelete = async <T>(url: string, config?: AxiosRequestConfig): Promise<T | void> => {
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    throw new Error('認証が必要です');
+  }
+
+  const client = createAuthClient(token);
+  const response = await client.delete<T>(url, config);
+  return response.data;
+};
+
 // フォームデータ形式でログインリクエストを送信
 export const loginWithCredentials = async (email: string, password: string) => {
   const formData = new URLSearchParams();
@@ -113,4 +126,9 @@ export const sendChatMessage = async (sessionId: number, content: string): Promi
     content,
     role: "user"
   });
+};
+
+// チャットセッションを削除
+export const deleteChatSession = async (sessionId: number): Promise<void> => {
+  await authDelete(`/v1/chat/sessions/${sessionId}`);
 };
