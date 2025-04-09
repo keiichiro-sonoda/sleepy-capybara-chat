@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchCurrentUser } from '@/utils/api';
+import axios from 'axios';
+import { fetchCurrentUser, getApiUrl } from '@/utils/api';
 
 export type User = {
   email: string;
@@ -12,6 +13,11 @@ export type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+};
+
+type RegisterParams = {
+  email: string;
+  password: string;
 };
 
 // 認証状態を管理するフック
@@ -83,9 +89,32 @@ export const useAuth = () => {
     router.push('/auth/login');
   };
 
+  // ユーザー登録処理
+  const register = async ({ email, password }: RegisterParams) => {
+    try {
+      const response = await axios.post(`${getApiUrl()}/v1/auth/register`, {
+        email,
+        password,
+      });
+
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const message = error.response.data.detail || error.response.data.message;
+        throw new Error(Array.isArray(message) ? message[0] : message);
+      }
+      throw new Error('ユーザー登録に失敗しました');
+    }
+  };
+
   return {
     ...authState,
     login,
     logout,
+    register,
   };
 }; 

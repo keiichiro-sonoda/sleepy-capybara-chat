@@ -67,4 +67,4 @@ export const loginWithCredentials = async (email: string, password: string) => {
 // ユーザー情報を取得
 export const fetchCurrentUser = async (): Promise<User> => {
   return await authGet<User>('/v1/auth/me');
-}; 
+};
