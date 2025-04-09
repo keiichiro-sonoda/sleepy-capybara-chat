@@ -4,9 +4,10 @@ type ChatInputProps = {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   disabled: boolean;
+  isStreaming?: boolean;
 };
 
-const ChatInput = ({ onSendMessage, isLoading, disabled }: ChatInputProps) => {
+const ChatInput = ({ onSendMessage, isLoading, disabled, isStreaming = true }: ChatInputProps) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
@@ -48,6 +49,11 @@ const ChatInput = ({ onSendMessage, isLoading, disabled }: ChatInputProps) => {
           )}
         </button>
       </form>
+      {isStreaming && (
+        <div className="max-w-3xl mx-auto mt-1">
+          <p className="text-xs text-gray-500">ストリーミングモード: 文章がリアルタイムで生成されます</p>
+        </div>
+      )}
     </div>
   );
 };

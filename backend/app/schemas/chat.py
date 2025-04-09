@@ -8,7 +8,7 @@ class MessageBase(BaseModel):
 
 
 class MessageCreate(MessageBase):
-    pass
+    stream: bool = False
 
 
 class Message(MessageBase):

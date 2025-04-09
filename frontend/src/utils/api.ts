@@ -120,12 +120,92 @@ export const getChatMessages = async (sessionId: number): Promise<ChatMessage[]>
   return await authGet<ChatMessage[]>(`/v1/chat/sessions/${sessionId}/messages`);
 };
 
-// メッセージを送信して応答を取得
+// メッセージを送信して応答を取得（非ストリーム）
 export const sendChatMessage = async (sessionId: number, content: string): Promise<ChatResponse> => {
   return await authPost<ChatResponse>(`/v1/chat/sessions/${sessionId}/messages`, {
     content,
-    role: "user"
+    role: "user",
+    stream: false
   });
+};
+
+// メッセージを送信して応答をストリーミングで取得
+export const sendChatMessageStreaming = async (
+  sessionId: number,
+  content: string,
+  onChunk: (chunk: string) => void,
+  onComplete: (fullResponse: string) => void,
+  onError: (error: string) => void
+): Promise<void> => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('認証が必要です');
+  }
+
+  try {
+    const apiUrl = `${getApiUrl()}/v1/chat/sessions/${sessionId}/messages`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        content,
+        role: "user",
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    // EventSourceの代わりにfetchのストリーミングを使用
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is null');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // ストリームの読み取り
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // 新しいテキストをバッファに追加
+      buffer += decoder.decode(value, { stream: true });
+
+      // バッファを行に分割して処理
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || ''; // 最後の不完全な行をバッファに戻す
+
+      for (const line of lines) {
+        if (!line.trim() || !line.startsWith('data: ')) continue;
+
+        try {
+          const eventData = JSON.parse(line.substring(6)); // 'data: ' を取り除く
+
+          if (eventData.event === 'chunk' && eventData.content) {
+            onChunk(eventData.content);
+          } else if (eventData.event === 'done') {
+            onComplete(eventData.content);
+            return;
+          } else if (eventData.event === 'error') {
+            onError(eventData.message || 'Unknown error');
+            return;
+          }
+        } catch (e) {
+          console.error('Error parsing event data:', e, line);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in streaming request:', error);
+    onError(error instanceof Error ? error.message : String(error));
+  }
 };
 
 // チャットセッションを削除

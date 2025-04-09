@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   createChatSession,
   sendChatMessage,
+  sendChatMessageStreaming,
   getChatSessions,
   getChatMessages,
   deleteChatSession,
@@ -23,6 +24,7 @@ type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isStreaming?: boolean; // ストリーミング中かどうかを示すフラグ
 };
 
 function ChatContent() {
@@ -35,6 +37,7 @@ function ChatContent() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isNewChat, setIsNewChat] = useState(true); // 新規チャットモードかどうか
+  const [useStreaming, setUseStreaming] = useState(true); // ストリーミングモードを使用するかどうか
 
   // セッション一覧を取得
   const fetchSessions = async () => {
@@ -168,23 +171,76 @@ function ChatContent() {
         setIsNewChat(false);
       }
 
-      // メッセージを送信
-      const response = await sendChatMessage(sessionId!, content);
+      if (useStreaming) {
+        // ストリーミングモードでのメッセージ送信
+        // 最初に空のアシスタントメッセージを追加
+        const tempAssistantId = (Date.now() + 1).toString();
+        const assistantMessage: Message = {
+          id: tempAssistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true // ストリーミング中フラグを設定
+        };
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date()
-      };
+        setMessages(prev => [...prev, assistantMessage]);
 
-      setMessages(prev => [...prev, assistantMessage]);
+        // ストリーミングリクエストを送信
+        await sendChatMessageStreaming(
+          sessionId!,
+          content,
+          // チャンク受信時のコールバック
+          (chunk: string) => {
+            setMessages(prev => prev.map(msg =>
+              msg.id === tempAssistantId
+                ? { ...msg, content: msg.content + chunk }
+                : msg
+            ));
+          },
+          // 完了時のコールバック
+          (fullResponse: string) => {
+            setMessages(prev => prev.map(msg =>
+              msg.id === tempAssistantId
+                ? { ...msg, content: fullResponse, isStreaming: false }
+                : msg
+            ));
+            setIsLoading(false);
+          },
+          // エラー時のコールバック
+          (errorMsg: string) => {
+            setError(`AIからの応答の取得に失敗しました: ${errorMsg}`);
+            setMessages(prev => prev.map(msg =>
+              msg.id === tempAssistantId
+                ? { ...msg, content: 'エラーが発生しました', isStreaming: false }
+                : msg
+            ));
+            setIsLoading(false);
+          }
+        );
+      } else {
+        // 非ストリーミングモードでのメッセージ送信（従来の実装）
+        const response = await sendChatMessage(sessionId!, content);
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.response,
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        setIsLoading(false);
+      }
     } catch (error) {
       console.error('Failed to get AI response:', error);
       setError('AIからの応答の取得に失敗しました。もう一度お試しください。');
-    } finally {
       setIsLoading(false);
     }
+  };
+
+  // ストリーミングモードの切り替え
+  const toggleStreamingMode = () => {
+    setUseStreaming(prev => !prev);
   };
 
   return (
@@ -194,6 +250,8 @@ function ChatContent() {
         onLogout={logout}
         onHome={() => router.push('/')}
         currentModel={currentSession?.model_name}
+        useStreaming={useStreaming}
+        onToggleStreaming={toggleStreamingMode}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -221,6 +279,7 @@ function ChatContent() {
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
             disabled={false} // 常に入力可能に設定
+            isStreaming={useStreaming}
           />
         </div>
       </div>

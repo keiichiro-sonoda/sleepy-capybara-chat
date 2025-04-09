@@ -5,9 +5,18 @@ type ChatHeaderProps = {
   onLogout: () => void;
   onHome: () => void;
   currentModel?: string;
+  useStreaming?: boolean;
+  onToggleStreaming?: () => void;
 };
 
-const ChatHeader = ({ user, onLogout, onHome, currentModel }: ChatHeaderProps) => {
+const ChatHeader = ({
+  user,
+  onLogout,
+  onHome,
+  currentModel,
+  useStreaming = true,
+  onToggleStreaming
+}: ChatHeaderProps) => {
   return (
     <header className="bg-white shadow p-4">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -20,6 +29,18 @@ const ChatHeader = ({ user, onLogout, onHome, currentModel }: ChatHeaderProps) =
           )}
         </div>
         <div className="flex items-center gap-4">
+          {onToggleStreaming && (
+            <button
+              onClick={onToggleStreaming}
+              className={`px-3 py-1 rounded text-sm ${useStreaming
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-700'
+                }`}
+              title={useStreaming ? 'ストリーミングモード: ON' : 'ストリーミングモード: OFF'}
+            >
+              {useStreaming ? 'ストリーム' : '一括'}
+            </button>
+          )}
           <span className="text-sm text-gray-600">{user?.email}</span>
           <button
             onClick={onHome}

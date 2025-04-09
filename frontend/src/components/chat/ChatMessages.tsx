@@ -5,6 +5,7 @@ type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isStreaming?: boolean;
 };
 
 type ChatMessagesProps = {
@@ -64,9 +65,15 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
                   : 'bg-gray-200 text-gray-800 rounded-bl-none'
                   }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <p className="whitespace-pre-wrap">
+                  {message.content}
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse" />
+                  )}
+                </p>
                 <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString()}
+                  {message.isStreaming && ' (ストリーミング中...)'}
                 </div>
               </div>
             </div>
