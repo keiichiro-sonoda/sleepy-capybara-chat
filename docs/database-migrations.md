@@ -119,6 +119,20 @@
    docker-compose exec backend poetry run alembic downgrade <revision_id>
    ```
 
+4. **コンテナ内とホスト側のマイグレーションファイルの不一致**:
+   ```
+   # 1. docker-compose.ymlのボリュームマウント設定を確認
+   #    migrationsディレクトリが正しくマウントされているか確認
+   #    例: ./backend/migrations:/src/migrations
+
+   # 2. マウント設定を追加した場合、コンテナを再起動
+   docker-compose down
+   docker-compose up -d
+   
+   # 3. マイグレーションを再実行
+   docker-compose exec backend poetry run alembic upgrade head
+   ```
+
 ## 参考リソース
 
 - [Alembic公式ドキュメント](https://alembic.sqlalchemy.org/)
