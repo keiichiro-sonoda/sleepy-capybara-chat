@@ -31,6 +31,7 @@ services:
     volumes:
       - ./backend/app:/src/app
       - ./backend/tests:/src/tests
+      - ./backend/migrations:/src/migrations
       - ./.env:/src/.env # ルートの.envをマウント
     env_file:
       - ./backend/.env # バックエンド固有の.envも読み込み
