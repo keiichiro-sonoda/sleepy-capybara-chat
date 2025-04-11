@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = True
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Admin credentials
+    ADMIN_EMAIL: str = "admin@example.com"
+    ADMIN_PASSWORD: str = "admin123"  # 本番環境では必ず変更すること
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

@@ -2,11 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from app.core.config import get_settings
 from app.api.auth import auth
 from app.api.chat import chat
-from app.db.session import Base, engine
+from app.db.session import Base, engine, SessionLocal
+from app.db.seed import seed_admin_user
 
 settings = get_settings()
 
@@ -21,8 +24,23 @@ logging.basicConfig(
 # データベーステーブルの作成
 Base.metadata.create_all(bind=engine)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # 起動時の処理
+    db = SessionLocal()
+    try:
+        seed_admin_user(db)
+    finally:
+        db.close()
+    yield
+    # シャットダウン時の処理（必要な場合）
+
+
 app = FastAPI(
-    title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan,
 )
 
 # CORSミドルウェアの設定

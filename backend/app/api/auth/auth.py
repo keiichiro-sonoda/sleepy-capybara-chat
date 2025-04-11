@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,12 @@ from app.core.security import (
     create_access_token,
     get_current_user,
 )
+from app.core.deps import get_current_active_admin
 from app.core.token import set_verification_token, verify_token
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import Token, UserCreate, User as UserSchema
+from app.schemas.user import UserList
 from app.services.email import send_verification_mail
 
 router = APIRouter()
@@ -108,3 +110,73 @@ async def login(
 @router.get("/me", response_model=UserSchema)
 async def read_users_me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    # 自分自身の削除または管理者による削除を許可
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
+
+
+@router.delete("/me")
+async def delete_me(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> dict[str, str]:
+    db.delete(current_user)
+    db.commit()
+
+    return {"message": "Your account has been deleted successfully"}
+
+
+@router.post("/users/{user_id}/admin")
+async def set_admin(
+    user_id: int,
+    is_admin: bool,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_admin),
+) -> dict[str, str]:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    user.is_admin = is_admin
+    db.commit()
+
+    return {"message": f"Admin status updated to {is_admin} for user {user_id}"}
+
+
+@router.get("/users", response_model=list[UserList])
+async def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_admin),
+) -> list[User]:
+    """
+    管理者用ユーザー一覧取得API
+    - 管理者のみがアクセス可能
+    - ページネーション対応
+    - 機密情報（パスワードハッシュなど）は除外
+    """
+    users = db.query(User).offset(skip).limit(limit).all()
+    return users
