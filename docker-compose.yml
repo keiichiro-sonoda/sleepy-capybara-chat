@@ -32,9 +32,10 @@ services:
       - ./backend/app:/src/app
       - ./backend/tests:/src/tests
       - ./backend/migrations:/src/migrations
-      - ./.env:/src/.env # ルートの.envをマウント
+      - ./.env:/src/.env
+    user: "1000:1000"  # appuserのUID:GIDを指定
     env_file:
-      - ./backend/.env # バックエンド固有の.envも読み込み
+      - ./backend/.env
     depends_on:
       - db
       - ollama
@@ -60,6 +61,8 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always

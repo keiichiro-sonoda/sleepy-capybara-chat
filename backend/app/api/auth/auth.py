@@ -16,7 +16,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import Token, UserCreate, User as UserSchema
 from app.schemas.user import UserList
-from app.services.email import send_verification_mail
+from app.services.email import send_verification_email
 
 router = APIRouter()
 settings = get_settings()
@@ -45,7 +45,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)) -> User:
         token = set_verification_token(db, db_user)
 
         # 確認メール送信
-        await send_verification_mail(user.email, token)
+        await send_verification_email(user.email, token)
 
         # すべて成功したらコミット
         db.commit()

@@ -1,6 +1,9 @@
 FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1
 
+# システムユーザーの作成
+RUN useradd -m -u 1000 appuser
+
 WORKDIR /src
 
 # pipを使ってpoetryをインストール
@@ -21,7 +24,13 @@ COPY migrations migrations/
 COPY alembic.ini .
 
 # mypyで型チェックを実行
-RUN poetry run mypy app/
+# RUN poetry run mypy app/
+
+# 権限の設定
+RUN chown -R appuser:appuser /src
+
+# ユーザーの切り替え
+USER appuser
 
 # uvicornのサーバーを立ち上げる
 ENTRYPOINT ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]

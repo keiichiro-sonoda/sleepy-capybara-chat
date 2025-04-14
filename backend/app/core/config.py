@@ -25,19 +25,23 @@ class Settings(BaseSettings):
     # Ollama設定
     OLLAMA_API_BASE_URL: str = "http://ollama:11434"
 
-    # メール設定
+    # メール設定 (MailHog用)
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
-    MAIL_FROM: str = ""
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = ""
+    MAIL_FROM: str = "noreply@example.com"
+    MAIL_PORT: int = 1025
+    MAIL_SERVER: str = "mailhog"
     MAIL_SSL_TLS: bool = False
-    MAIL_STARTTLS: bool = True
+    MAIL_STARTTLS: bool = False
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Admin credentials
     ADMIN_EMAIL: str = "admin@example.com"
     ADMIN_PASSWORD: str = "admin123"  # 本番環境では必ず変更すること
+
+    # Email Service Configuration
+    EMAIL_SERVICE: str = "mailhog"  # "mailhog" or "sendgrid"
+    SENDGRID_API_KEY: str = ""  # SendGrid API Key
 
     @property
     def DATABASE_URL(self) -> str:
