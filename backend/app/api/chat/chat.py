@@ -19,6 +19,7 @@ from app.schemas.chat import (
     Message as MessageSchema,
     ChatResponse,
 )
+from app.services.chat import ChatService
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -98,6 +99,15 @@ async def create_message(
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
+
+    # セッション内の最初のメッセージの場合、セッション名を生成
+    message_count = db.query(Message).filter(Message.session_id == session_id).count()
+    if message_count == 1:  # 最初のメッセージ
+        session_name = await ChatService.generate_session_name_from_message(
+            message.content
+        )
+        chat_session.name = session_name
+        db.commit()
 
     # 会話履歴を取得（現在のセッションの全メッセージ）
     chat_history = (

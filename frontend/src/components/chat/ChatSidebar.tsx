@@ -75,7 +75,7 @@ const ChatSidebar = ({
                         </svg>
                         <div className="truncate">
                           <p className="truncate">
-                            {new Date(session.created_at).toLocaleDateString()}
+                            {session.name || new Date(session.created_at).toLocaleDateString()}
                           </p>
                           <p className="text-xs text-gray-400">{session.model_name}</p>
                         </div>

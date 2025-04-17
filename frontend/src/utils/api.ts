@@ -86,6 +86,7 @@ export const fetchCurrentUser = async (): Promise<User> => {
 export type ChatSession = {
   id: number;
   model_name: string;
+  name: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -171,6 +171,9 @@ function ChatContent() {
         setIsNewChat(false);
       }
 
+      // メッセージ数をカウント（最初のメッセージかどうかを判定するため）
+      const isFirstMessage = messages.length === 0;
+
       if (useStreaming) {
         // ストリーミングモードでのメッセージ送信
         // 最初に空のアシスタントメッセージを追加
@@ -180,7 +183,7 @@ function ChatContent() {
           role: 'assistant',
           content: '',
           timestamp: new Date(),
-          isStreaming: true // ストリーミング中フラグを設定
+          isStreaming: true
         };
 
         setMessages(prev => [...prev, assistantMessage]);
@@ -198,12 +201,16 @@ function ChatContent() {
             ));
           },
           // 完了時のコールバック
-          (fullResponse: string) => {
+          async (fullResponse: string) => {
             setMessages(prev => prev.map(msg =>
               msg.id === tempAssistantId
                 ? { ...msg, content: fullResponse, isStreaming: false }
                 : msg
             ));
+            // 最初のメッセージだった場合は、セッション一覧を更新
+            if (isFirstMessage) {
+              await fetchSessions();
+            }
             setIsLoading(false);
           },
           // エラー時のコールバック
@@ -229,6 +236,10 @@ function ChatContent() {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        // 最初のメッセージだった場合は、セッション一覧を更新
+        if (isFirstMessage) {
+          await fetchSessions();
+        }
         setIsLoading(false);
       }
     } catch (error) {
