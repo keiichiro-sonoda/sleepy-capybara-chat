@@ -73,6 +73,17 @@ services:
       - "1025:1025"  # SMTP port
       - "8025:8025"  # Web UI (ブラウザでメール確認可能)
 
+  # Cloudflare Tunnel サービス
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    volumes:
+      - cloudflared_data:/home/nonroot/.cloudflared
+
 volumes:
   postgres_data:
-  ollama_data: 
+  ollama_data:
+  cloudflared_data: 
