@@ -46,7 +46,45 @@ def upgrade() -> None:
         sa.UniqueConstraint("email"),
     )
 
+    # Create chat_sessions table
+    op.create_table(
+        "chat_sessions",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=True),
+        sa.Column("model_name", sa.String(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+        sa.PrimaryKeyConstraint("id"),
+    )
+
+    # Create messages table
+    op.create_table(
+        "messages",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("role", sa.String(), nullable=False),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(["session_id"], ["chat_sessions.id"]),
+        sa.PrimaryKeyConstraint("id"),
+    )
+
 
 def downgrade() -> None:
-    # Drop users table
+    # Drop tables in reverse order
+    op.drop_table("messages")
+    op.drop_table("chat_sessions")
     op.drop_table("users")

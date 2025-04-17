@@ -21,6 +21,7 @@ class Message(MessageBase):
 
 class ChatSessionBase(BaseModel):
     model_name: str = "llama3"
+    name: str | None = None
 
 
 class ChatSessionCreate(ChatSessionBase):
