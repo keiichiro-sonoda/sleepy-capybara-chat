@@ -1,12 +1,14 @@
-import { User } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
+import { AVAILABLE_MODELS, AIModel } from '@/utils/constants';
 
 type ChatHeaderProps = {
-  user: User | null;
+  user: ReturnType<typeof useAuth>['user'];
   onLogout: () => void;
   onHome: () => void;
   currentModel?: string;
-  useStreaming?: boolean;
-  onToggleStreaming?: () => void;
+  useStreaming: boolean;
+  onToggleStreaming: () => void;
+  onModelChange?: (model: string) => void;
 };
 
 const ChatHeader = ({
@@ -14,46 +16,66 @@ const ChatHeader = ({
   onLogout,
   onHome,
   currentModel,
-  useStreaming = true,
-  onToggleStreaming
+  useStreaming,
+  onToggleStreaming,
+  onModelChange
 }: ChatHeaderProps) => {
   return (
-    <header className="bg-white shadow p-4">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div className="flex items-center">
-          <h1 className="text-xl font-semibold text-gray-800">AIチャット</h1>
-          {currentModel && (
-            <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-              {currentModel}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {onToggleStreaming && (
-            <button
-              onClick={onToggleStreaming}
-              className={`px-3 py-1 rounded text-sm ${useStreaming
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-700'
-                }`}
-              title={useStreaming ? 'ストリーミングモード: ON' : 'ストリーミングモード: OFF'}
-            >
-              {useStreaming ? 'ストリーム' : '一括'}
-            </button>
-          )}
-          <span className="text-sm text-gray-600">{user?.email}</span>
+    <header className="bg-gray-800 text-white p-4 shadow-md">
+      <div className="container mx-auto flex justify-between items-center">
+        <div className="flex items-center space-x-4">
           <button
             onClick={onHome}
-            className="text-gray-600 hover:text-gray-800"
+            className="text-xl font-bold flex items-center hover:text-blue-300 transition-colors"
           >
-            ホームに戻る
+            <span>🦥</span>
+            <span className="ml-2">Sleepy Capybara Chat</span>
           </button>
-          <button
-            onClick={onLogout}
-            className="text-red-600 hover:text-red-800"
-          >
-            ログアウト
-          </button>
+
+          {/* モデル選択ドロップダウン */}
+          <div className="ml-4">
+            <select
+              className="bg-gray-700 text-white rounded-md px-3 py-1 text-sm"
+              value={currentModel || AVAILABLE_MODELS[0].id}
+              onChange={e => onModelChange && onModelChange(e.target.value)}
+              disabled={!onModelChange}
+            >
+              {AVAILABLE_MODELS.map((model: AIModel) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          {/* ストリーミングモード切り替えスイッチ */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm">ストリーミング:</span>
+            <button
+              onClick={onToggleStreaming}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full ${useStreaming ? 'bg-blue-600' : 'bg-gray-500'
+                }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${useStreaming ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+              />
+            </button>
+          </div>
+
+          {user && (
+            <div className="flex items-center">
+              <span className="mr-2 text-sm hidden md:inline">{user.email}</span>
+              <button
+                onClick={onLogout}
+                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+              >
+                ログアウト
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

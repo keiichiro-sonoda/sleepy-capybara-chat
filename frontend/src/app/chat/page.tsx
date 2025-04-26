@@ -38,6 +38,7 @@ function ChatContent() {
   const [error, setError] = useState<string | null>(null);
   const [isNewChat, setIsNewChat] = useState(true); // 新規チャットモードかどうか
   const [useStreaming, setUseStreaming] = useState(true); // ストリーミングモードを使用するかどうか
+  const [selectedModel, setSelectedModel] = useState("llama3");
 
   // セッション一覧を取得
   const fetchSessions = async () => {
@@ -67,10 +68,10 @@ function ChatContent() {
   };
 
   // 新しいチャットセッションを作成
-  const createNewSession = async (): Promise<ChatSession> => {
+  const createNewSession = async (modelName?: string): Promise<ChatSession> => {
     try {
       setIsLoading(true);
-      const newSession = await createChatSession();
+      const newSession = await createChatSession(modelName || "llama3");
       setCurrentSession(newSession);
 
       // セッション一覧を更新
@@ -166,7 +167,7 @@ function ChatContent() {
 
       // 新規チャットモードで、まだセッションがない場合は作成する
       if (isNewChat && !currentSession) {
-        const newSession = await createNewSession();
+        const newSession = await createNewSession(selectedModel);
         sessionId = newSession.id;
         setIsNewChat(false);
       }
@@ -254,15 +255,21 @@ function ChatContent() {
     setUseStreaming(prev => !prev);
   };
 
+  // モデル選択の変更ハンドラ
+  const handleModelChange = (model: string) => {
+    setSelectedModel(model);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <ChatHeader
         user={user}
         onLogout={logout}
         onHome={() => router.push('/')}
-        currentModel={currentSession?.model_name}
+        currentModel={currentSession?.model_name || selectedModel}
         useStreaming={useStreaming}
         onToggleStreaming={toggleStreamingMode}
+        onModelChange={isNewChat ? handleModelChange : undefined}
       />
 
       <div className="flex flex-1 overflow-hidden">
