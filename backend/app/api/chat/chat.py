@@ -2,7 +2,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import httpx
 import json
 import asyncio
 import typing
@@ -117,128 +116,159 @@ async def create_message(
         .all()
     )
 
-    # Ollamaの /api/chat エンドポイント用にメッセージを整形
+    # メッセージを整形
     formatted_messages = [
         {"role": msg.role, "content": msg.content} for msg in chat_history
     ]
-
-    # リクエストの内容をログ出力
-    request_data = {
-        "model": chat_session.model_name,
-        "messages": formatted_messages,
-        "stream": message.stream,  # ストリーミングモードの設定をクライアントから受け取る
-    }
-    logger.info(f"Sending request to Ollama API: {request_data}")
 
     # ストリーミングモードの場合
     if message.stream:
         return StreamingResponse(
             _stream_chat_response(
-                session_id, request_data, settings.OLLAMA_API_BASE_URL, db
+                session_id, formatted_messages, chat_session.model_name, db
             ),
             media_type="text/event-stream",
         )
 
-    # 非ストリーミングモードの場合（従来のコード）
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{settings.OLLAMA_API_BASE_URL}/api/chat",
-            json=request_data,
+    # 非ストリーミングモードの場合
+    try:
+        response_data = await ChatService.get_chat_response(
+            formatted_messages, chat_session.model_name, stream=False
         )
-        if response.status_code != 200:
-            logger.error(f"Ollama API error: {response.status_code} {response.text}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get response from Ollama: {response.status_code} {response.text}",
-            )
-
-        response_data = response.json()
-        logger.info(f"Received response from Ollama API: {response_data}")
         ai_response = response_data["message"]["content"]
 
-    # AIのレスポンスを保存
-    ai_message = Message(session_id=session_id, role="assistant", content=ai_response)
-    db.add(ai_message)
-    db.commit()
+        # AIのレスポンスを保存
+        ai_message = Message(
+            session_id=session_id, role="assistant", content=ai_response
+        )
+        db.add(ai_message)
+        db.commit()
 
-    return ChatResponse(response=ai_response, session_id=session_id)
+        return ChatResponse(response=ai_response, session_id=session_id)
+    except Exception as e:
+        logger.error(f"Error getting chat response: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get AI response: {str(e)}",
+        )
 
 
 # ストリーミングレスポンスを処理する非同期ジェネレータ
 async def _stream_chat_response(
-    session_id: int, request_data: dict, ollama_api_base_url: str, db: Session
+    session_id: int, messages: list, model_name: str, db: Session
 ) -> typing.AsyncGenerator[str, None]:
+    # 開始ログ
+    logger.info(
+        f"Starting streaming response for session_id={session_id}, model={model_name}"
+    )
+
     # 最終的な完全なAI応答を保持する変数
     complete_response = ""
 
     # SSE (Server-Sent Events)形式のヘッダーを送信
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream(
-            "POST", f"{ollama_api_base_url}/api/chat", json=request_data, timeout=300.0
-        ) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                logger.error(f"Ollama API error: {response.status_code} {error_text!r}")
+    try:
+        # ジェネレータを使用して結果を取得
+        chat_response_gen = await ChatService.get_chat_response(
+            messages, model_name, stream=True
+        )
+
+        chunk_count = 0
+        # チャンク処理
+        async for chunk, is_done in chat_response_gen:
+            chunk_count += 1
+            logger.debug(
+                f"Chunk #{chunk_count} received: length={len(chunk) if chunk else 0}, is_done={is_done}"
+            )
+
+            if chunk:
+                complete_response += chunk
+                # クライアントにチャンクを送信
+                yield "data: " + json.dumps(
+                    {"event": "chunk", "content": chunk}
+                ) + "\n\n"
+
+            if is_done:
+                # ログ追加：保存前の状態確認
+                logger.info(
+                    f"Saving AI response to DB: session_id={session_id}, content_length={len(complete_response)}, chunks_processed={chunk_count}"
+                )
+
+                # 空の応答をチェック
+                if not complete_response:
+                    logger.warning(
+                        f"Empty response detected for session_id={session_id}"
+                    )
+                    # 空の場合でもエラーにせず保存
+                    complete_response = "応答を生成できませんでした。"
+
+                # 完全な応答をDBに保存
+                ai_message = Message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=complete_response,
+                )
+                db.add(ai_message)
+                db.commit()
+                db.refresh(ai_message)  # IDを取得するためにリフレッシュ
+
+                # ログ追加：保存後の確認
+                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
+
+                # クライアントに完了イベントを送信
                 yield "data: " + json.dumps(
                     {
-                        "event": "error",
-                        "message": f"Error from Ollama API: {response.status_code}",
+                        "event": "done",
+                        "content": complete_response,
+                        "session_id": session_id,
                     }
                 ) + "\n\n"
-                return
 
-            # Ollamaからのストリーミングレスポンスを処理
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
+                # 保存処理とクライアント通知が完了
+                logger.info(f"Streaming response completed for session_id={session_id}")
+                break
 
-                try:
-                    data = json.loads(line)
+            # 少し待機して、クライアントに処理時間を与える
+            await asyncio.sleep(0.01)
 
-                    # 応答テキストを取得
-                    chunk = data.get("message", {}).get("content", "")
-                    if chunk:
-                        complete_response += chunk
-                        # クライアントにチャンクを送信
-                        yield "data: " + json.dumps(
-                            {"event": "chunk", "content": chunk}
-                        ) + "\n\n"
+        # 全てのチャンクを処理したが、is_doneを受け取らなかった場合
+        if not is_done:
+            logger.warning(
+                f"Stream completed without is_done signal for session_id={session_id}"
+            )
 
-                    # 応答が完了したら、完了イベントを送信
-                    if data.get("done", False):
-                        # 完全な応答をDBに保存
-                        ai_message = Message(
-                            session_id=session_id,
-                            role="assistant",
-                            content=complete_response,
-                        )
-                        db.add(ai_message)
-                        db.commit()
+            # それでも応答があれば保存する
+            if complete_response:
+                logger.info(
+                    f"Saving AI response anyway: session_id={session_id}, content_length={len(complete_response)}"
+                )
 
-                        # クライアントに完了イベントを送信
-                        yield "data: " + json.dumps(
-                            {
-                                "event": "done",
-                                "content": complete_response,
-                                "session_id": session_id,
-                            }
-                        ) + "\n\n"
-                        break
+                ai_message = Message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=complete_response,
+                )
+                db.add(ai_message)
+                db.commit()
+                db.refresh(ai_message)
 
-                    # 少し待機して、クライアントに処理時間を与える
-                    await asyncio.sleep(0.01)
+                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
 
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decode error: {e} for line: {line}")
-                    continue
-                except Exception as e:
-                    logger.error(f"Error processing stream: {e}")
-                    yield "data: " + json.dumps(
-                        {"event": "error", "message": str(e)}
-                    ) + "\n\n"
-                    break
+                # クライアントに完了イベントを送信
+                yield "data: " + json.dumps(
+                    {
+                        "event": "done",
+                        "content": complete_response,
+                        "session_id": session_id,
+                    }
+                ) + "\n\n"
+
+    except Exception as e:
+        logger.error(
+            f"Error in streaming response: {e}", exc_info=True
+        )  # スタックトレースも出力
+        yield "data: " + json.dumps({"event": "error", "message": str(e)}) + "\n\n"
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
