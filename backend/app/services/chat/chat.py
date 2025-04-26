@@ -10,6 +10,7 @@ from app.services.chat.openai import OpenAIProvider
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+
 class ProviderFactory:
     """AIプロバイダファクトリークラス"""
 
@@ -23,10 +24,7 @@ class ProviderFactory:
         elif provider_name.lower() == "openai":
             if not settings.OPENAI_API_KEY:
                 raise ValueError("OpenAI API key is not set")
-            return OpenAIProvider(
-                api_key=settings.OPENAI_API_KEY,
-                organization_id=settings.OPENAI_ORGANIZATION_ID,
-            )
+            return OpenAIProvider()
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
 
@@ -78,5 +76,16 @@ class ChatService:
     ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
         provider_name, actual_model = ChatService.get_provider_from_model(model_name)
+        logger.debug(
+            f"Using provider: {provider_name}, model: {actual_model}, stream: {stream}"
+        )
+
         provider = ProviderFactory.get_provider(provider_name)
-        return await provider.chat_completion(messages, actual_model, stream) 
+        response = await provider.chat_completion(messages, actual_model, stream)
+
+        if not stream:
+            logger.debug(
+                f"Non-streaming response type: {type(response)}, content: {response}"
+            )
+
+        return response

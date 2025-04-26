@@ -6,16 +6,16 @@ from typing import Any, AsyncGenerator
 logger = logging.getLogger(__name__)
 
 class ModelProvider(ABC):
-    """AIモデルプロバイダの抽象基底クラス"""
+    """AI言語モデルプロバイダの基底クラス"""
 
     @abstractmethod
     async def chat_completion(
         self, messages: list[dict[str, str]], model_name: str, stream: bool = False
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
-        """チャット完了APIを呼び出す"""
+    ) -> dict[str, Any] | AsyncGenerator[str, None]:
+        """チャット形式での補完を行う"""
         pass
 
     @abstractmethod
     async def text_generation(self, prompt: str, model_name: str) -> str:
-        """テキスト生成APIを呼び出す"""
+        """テキスト生成を行う"""
         pass
