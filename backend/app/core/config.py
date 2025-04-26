@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # OpenAI設定
     OPENAI_API_KEY: str = ""
     OPENAI_ORGANIZATION_ID: str = ""
+    OPENAI_DEFAULT_RESPONSES_MODEL: str = "gpt-4.1-nano"
 
     # メール設定 (MailHog用)
     MAIL_USERNAME: str = ""

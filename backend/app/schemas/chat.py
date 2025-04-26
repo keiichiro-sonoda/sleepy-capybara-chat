@@ -1,5 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
+from typing import Literal
 
 
 class MessageBase(BaseModel):
@@ -25,7 +26,9 @@ class ChatSessionBase(BaseModel):
 
 
 class ChatSessionCreate(ChatSessionBase):
-    pass
+    # サポートされるモデル名をLiteralで指定することで型チェックが可能になります
+    # ただし、拡張性を考慮して単純なstrのままにしておくことも選択肢です
+    model_name: str = "llama3"
 
 
 class ChatSession(ChatSessionBase):
@@ -39,3 +42,10 @@ class ChatSession(ChatSessionBase):
 class ChatResponse(BaseModel):
     response: str
     session_id: int
+
+
+# 利用可能なモデルのリスト (フロントエンド側で使用)
+AVAILABLE_MODELS = [
+    {"id": "llama3", "name": "Llama 3", "provider": "ollama"},
+    {"id": "gpt-4.1-nano", "name": "GPT-4.1 Nano", "provider": "openai"},
+]

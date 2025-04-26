@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 import json
 import asyncio
-from typing import Dict, List, Any, AsyncGenerator, Optional, Tuple
+from typing import Any, AsyncGenerator
 import httpx
 
 from app.core.config import get_settings
@@ -17,8 +17,8 @@ class ModelProvider(ABC):
 
     @abstractmethod
     async def chat_completion(
-        self, messages: List[Dict[str, str]], model_name: str, stream: bool = False
-    ) -> Dict[str, Any] | AsyncGenerator[str, None]:
+        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[str, None]:
         """チャット完了APIを呼び出す"""
         pass
 
@@ -35,8 +35,8 @@ class OllamaProvider(ModelProvider):
         self.base_url = base_url
 
     async def chat_completion(
-        self, messages: List[Dict[str, str]], model_name: str, stream: bool = False
-    ) -> Dict[str, Any] | AsyncGenerator[str, None]:
+        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[str, None]:
         """Ollamaのチャットエンドポイントを呼び出す"""
         request_data = {
             "model": model_name,
@@ -68,7 +68,7 @@ class OllamaProvider(ModelProvider):
 
     async def _stream_chat_response(
         self, request_data: dict
-    ) -> AsyncGenerator[Tuple[str, bool], None]:
+    ) -> AsyncGenerator[tuple[str, bool], None]:
         """Ollamaストリーミングレスポンスをジェネレータとして処理"""
         complete_response = ""
 
@@ -162,15 +162,37 @@ class OllamaProvider(ModelProvider):
 class OpenAIProvider(ModelProvider):
     """OpenAIモデルプロバイダの実装"""
 
-    def __init__(self, api_key: str, organization_id: Optional[str] = None):
+    def __init__(self, api_key: str, organization_id: str | None = None):
         self.api_key = api_key
         self.organization_id = organization_id
         self.base_url = "https://api.openai.com/v1"
 
     async def chat_completion(
-        self, messages: List[Dict[str, str]], model_name: str, stream: bool = False
-    ) -> Dict[str, Any] | AsyncGenerator[str, None]:
+        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
         """OpenAIのチャットエンドポイントを呼び出す"""
+        # モデル名からAPI種別を判定
+        api_type = self._get_api_type(model_name)
+
+        if api_type == "responses":
+            return await self._responses_completion(messages, model_name, stream)
+        else:
+            return await self._chat_completion(messages, model_name, stream)
+
+    def _get_api_type(self, model_name: str) -> str:
+        """モデル名からAPI種別を判定"""
+        # 明示的にResponses APIを指定された場合のみResponses APIを使用
+        if "responses:" in model_name.lower():
+            # "responses:" プレフィックスを削除して実際のモデル名を返す
+            return "responses"
+
+        # それ以外の全モデルはChat Completions APIを使用
+        return "chat_completions"
+
+    async def _chat_completion(
+        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
+        """OpenAIのChat Completions APIを呼び出す"""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -185,10 +207,10 @@ class OpenAIProvider(ModelProvider):
             "stream": stream,
         }
 
-        logger.info(f"Sending request to OpenAI API: {request_data}")
+        logger.info(f"Sending request to OpenAI Chat Completions API: {request_data}")
 
         if stream:
-            return self._stream_chat_response(request_data, headers)
+            return self._stream_chat_completion(request_data, headers)
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
@@ -211,9 +233,129 @@ class OpenAIProvider(ModelProvider):
             content = response_data["choices"][0]["message"]["content"]
             return {"message": {"content": content}}
 
-    async def _stream_chat_response(
-        self, request_data: dict, headers: Dict[str, str]
-    ) -> AsyncGenerator[Tuple[str, bool], None]:
+    async def _responses_completion(
+        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
+        """OpenAIのResponses APIを呼び出す"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        if self.organization_id:
+            headers["OpenAI-Organization"] = self.organization_id
+
+        # Responsesフォーマットにメッセージを変換
+        input_content = self._format_messages_for_responses(messages)
+
+        request_data = {
+            "model": self._normalize_model_name(model_name),
+            "input": input_content,
+            "stream": stream,
+            "store": False,  # サーバーに会話を保存しない
+        }
+
+        logger.info(f"Sending request to OpenAI Responses API: {request_data}")
+
+        if stream:
+            return self._stream_responses_completion(request_data, headers)
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{self.base_url}/responses",
+                headers=headers,
+                json=request_data,
+            )
+            if response.status_code != 200:
+                logger.error(
+                    f"OpenAI Responses API error: {response.status_code} {response.text}"
+                )
+                raise Exception(
+                    f"Failed to get response from OpenAI Responses: {response.status_code} {response.text}"
+                )
+
+            response_data = response.json()
+            logger.info(f"Received response from OpenAI Responses API: {response_data}")
+
+            # Responses API形式からOllama形式に変換
+            content = response_data.get("text", "")
+            return {"message": {"content": content}}
+
+    def _normalize_model_name(self, model_name: str) -> str:
+        """モデル名を正規化"""
+        # "responses:" プレフィックスがある場合は削除
+        if model_name.lower().startswith("responses:"):
+            model_name = model_name[10:]
+
+        model_mapping = {
+            "gpt4.1nano": "gpt-4.1-nano",
+            "gpt41nano": "gpt-4.1-nano",
+            "gpt-41-nano": "gpt-4.1-nano",
+        }
+
+        # 特殊な形式の場合は正規化
+        normalized = model_name.lower().replace(".", "").replace("-", "")
+        if normalized in model_mapping:
+            return model_mapping[normalized]
+
+        return model_name
+
+    def _format_messages_for_responses(self, messages: list[dict[str, str]]) -> str:
+        """メッセージをResponses APIフォーマットに変換"""
+        # システムメッセージを抽出
+        system_message = None
+        conversation_history = []
+
+        for msg in messages:
+            role = msg.get("role", "").lower()
+            content = msg.get("content", "")
+
+            if role == "system":
+                system_message = content
+            else:
+                # ユーザーとアシスタントの会話履歴を構築
+                if role == "user":
+                    conversation_history.append(f"ユーザー: {content}")
+                elif role == "assistant":
+                    conversation_history.append(f"アシスタント: {content}")
+
+        # システムメッセージとこれまでの会話履歴を含む最終的なプロンプトを構築
+        final_prompt = ""
+
+        if system_message:
+            final_prompt += f"{system_message}\n\n"
+
+        if conversation_history:
+            # 最後のユーザーメッセージを除く会話履歴
+            conversation_context = "\n".join(conversation_history[:-1])
+            if conversation_context:
+                final_prompt += f"これまでの会話：\n{conversation_context}\n\n"
+
+            # 最後のユーザーメッセージ（通常は現在の質問）
+            last_user_message = (
+                conversation_history[-1]
+                if conversation_history
+                and conversation_history[-1].startswith("ユーザー: ")
+                else None
+            )
+            if last_user_message:
+                final_prompt += last_user_message.replace("ユーザー: ", "", 1)
+
+        # 空の場合はエラー回避
+        if not final_prompt.strip():
+            logger.warning("Empty prompt generated for Responses API")
+            # messagesから直接最後のユーザーメッセージを探す
+            for msg in reversed(messages):
+                if msg["role"] == "user":
+                    return msg["content"]
+            return "Empty message"
+
+        logger.debug(f"Formatted prompt for Responses API: {final_prompt}")
+        return final_prompt
+
+    async def _stream_chat_completion(
+        self, request_data: dict, headers: dict[str, str]
+    ) -> AsyncGenerator[tuple[str, bool], None]:
         """OpenAIストリーミングレスポンスをジェネレータとして処理"""
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -296,6 +438,124 @@ class OpenAIProvider(ModelProvider):
                     )
                     yield ("", True)
 
+    async def _stream_responses_completion(
+        self, request_data: dict, headers: dict[str, str]
+    ) -> AsyncGenerator[tuple[str, bool], None]:
+        """OpenAI Responses APIストリーミングレスポンスをジェネレータとして処理"""
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/responses",
+                headers=headers,
+                json=request_data,
+                timeout=300.0,
+            ) as response:
+                if response.status_code != 200:
+                    error_text = await response.aread()
+                    logger.error(
+                        f"OpenAI Responses API error: {response.status_code} {error_text!r}"
+                    )
+                    raise Exception(
+                        f"Error from OpenAI Responses API: {response.status_code}"
+                    )
+
+                # SSE形式のレスポンスを処理するための変数
+                complete_text = ""  # 完全なテキスト
+                is_completed = False
+                current_event = None  # 現在処理中のイベント
+                json_data = None  # イベントのデータ
+
+                # 最後のチャンクが処理されたかどうかを追跡
+                last_chunk_processed = False
+                last_delta_sent = False
+
+                try:
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+
+                        logger.debug(f"SSE Line: {line}")
+
+                        # イベント行の処理
+                        if line.startswith("event:"):
+                            current_event = line[6:].strip()
+                            logger.debug(f"SSE event: {current_event}")
+
+                            # 完了イベントを検出
+                            if current_event in [
+                                "response.completed",
+                                "response.output_text.done",
+                            ]:
+                                is_completed = True
+                            continue
+
+                        # データ行の処理
+                        if line.startswith("data:"):
+                            data_content = line[5:].strip()
+                            if data_content == "[DONE]":
+                                if not last_delta_sent:
+                                    logger.info(
+                                        "Received [DONE] marker, sending final done signal"
+                                    )
+                                    yield ("", True)
+                                    last_delta_sent = True
+                                break
+
+                            # データが空でなければJSON解析を試みる
+                            if data_content:
+                                try:
+                                    json_data = json.loads(data_content)
+
+                                    # データタイプによる処理分岐
+                                    if (
+                                        current_event == "response.output_text.delta"
+                                        and "delta" in json_data
+                                    ):
+                                        # デルタ（差分）テキストを取得
+                                        delta = json_data.get("delta", "")
+                                        if delta:
+                                            complete_text += delta
+                                            logger.debug(
+                                                f"Delta text: {delta}, is_completed: {is_completed}"
+                                            )
+                                            yield (delta, is_completed)
+
+                                            if is_completed and not last_delta_sent:
+                                                last_delta_sent = True
+
+                                    # 完全なテキストを含むデータの場合
+                                    elif "text" in json_data:
+                                        new_text = json_data["text"]
+                                        if new_text != complete_text:
+                                            # 差分を計算して送信
+                                            delta = new_text[len(complete_text) :]
+                                            complete_text = new_text
+
+                                            if delta:
+                                                logger.debug(
+                                                    f"Text delta from full text: {delta}"
+                                                )
+                                                yield (delta, is_completed)
+
+                                                if is_completed and not last_delta_sent:
+                                                    last_delta_sent = True
+                                except json.JSONDecodeError:
+                                    logger.debug(f"Invalid JSON data: {data_content}")
+                                except Exception as e:
+                                    logger.error(f"Error processing data: {str(e)}")
+                            continue
+
+                    # ストリームが完了した後の最終処理
+                    if not last_delta_sent:
+                        logger.info("Stream ended, sending final done signal")
+                        yield ("", True)
+
+                except Exception as e:
+                    logger.error(f"Error in stream processing: {str(e)}", exc_info=True)
+                    # エラーでも最後の完了シグナルを送信
+                    if not last_delta_sent:
+                        yield ("", True)
+
     async def text_generation(self, prompt: str, model_name: str) -> str:
         """OpenAIのテキスト生成エンドポイントを呼び出す"""
         headers = {
@@ -306,31 +566,64 @@ class OpenAIProvider(ModelProvider):
         if self.organization_id:
             headers["OpenAI-Organization"] = self.organization_id
 
-        request_data = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
-        }
+        # API種別の判定
+        api_type = self._get_api_type(model_name)
 
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=request_data,
-                )
+        if api_type == "responses":
+            # Responses APIを使用
+            request_data = {
+                "model": self._normalize_model_name(model_name),
+                "input": prompt,
+                "store": False,
+            }
 
-                if response.status_code != 200:
-                    logger.error(
-                        f"Failed to generate text: {response.status_code} {response.text}"
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        f"{self.base_url}/responses",
+                        headers=headers,
+                        json=request_data,
                     )
-                    return ""
 
-                response_data = response.json()
-                return response_data["choices"][0]["message"]["content"].strip()
+                    if response.status_code != 200:
+                        logger.error(
+                            f"Failed to generate text: {response.status_code} {response.text}"
+                        )
+                        return ""
 
-        except Exception as e:
-            logger.error(f"Error generating text: {e}")
-            return ""
+                    response_data = response.json()
+                    return response_data.get("text", "").strip()
+
+            except Exception as e:
+                logger.error(f"Error generating text: {e}")
+                return ""
+        else:
+            # Chat Completionsを使用
+            request_data = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=request_data,
+                    )
+
+                    if response.status_code != 200:
+                        logger.error(
+                            f"Failed to generate text: {response.status_code} {response.text}"
+                        )
+                        return ""
+
+                    response_data = response.json()
+                    return response_data["choices"][0]["message"]["content"].strip()
+
+            except Exception as e:
+                logger.error(f"Error generating text: {e}")
+                return ""
 
 
 class ProviderFactory:
@@ -358,10 +651,15 @@ class ChatService:
     """チャットサービスクラス"""
 
     @staticmethod
-    def get_provider_from_model(model_name: str) -> Tuple[str, str]:
+    def get_provider_from_model(model_name: str) -> tuple[str, str]:
         """モデル名からプロバイダとモデルを判定"""
-        # モデル名の規則に基づいてプロバイダを判定
-        if model_name.startswith("gpt-") or model_name.startswith("openai:"):
+        # OpenAIプロバイダを使用する条件
+        if (
+            model_name.startswith("gpt-")
+            or model_name.startswith("openai:")
+            or model_name.startswith("responses:")
+            or "gpt4" in model_name.lower().replace("-", "").replace(".", "")
+        ):
             if model_name.startswith("openai:"):
                 model_name = model_name[7:]  # "openai:" プレフィックスを削除
             return "openai", model_name
@@ -392,8 +690,8 @@ class ChatService:
 
     @staticmethod
     async def get_chat_response(
-        messages: List[Dict[str, str]], model_name: str, stream: bool = False
-    ) -> Dict[str, Any] | AsyncGenerator[Tuple[str, bool], None]:
+        messages: list[dict[str, str]], model_name: str, stream: bool = False
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
         provider_name, actual_model = ChatService.get_provider_from_model(model_name)
         provider = ProviderFactory.get_provider(provider_name)
