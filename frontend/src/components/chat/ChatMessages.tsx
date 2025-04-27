@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { AVAILABLE_MODELS } from '@/utils/constants';
 
 type Message = {
   id: string;
@@ -6,6 +7,7 @@ type Message = {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  modelName?: string;
 };
 
 type ChatMessagesProps = {
@@ -18,6 +20,13 @@ type ChatMessagesProps = {
 
 const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = false }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // モデル名から表示用の名前を取得
+  const getModelDisplayName = (modelId?: string): string => {
+    if (!modelId) return '';
+    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+    return model ? model.name : modelId;
+  };
 
   // 新しいメッセージが追加されたら一番下にスクロール
   useEffect(() => {
@@ -49,7 +58,7 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
               <>
                 <p>{isNewChat ? 'AIとの新しい会話を始めましょう' : 'チャット履歴がありません'}</p>
                 <p className="text-sm mt-2">例: 「こんにちは、何か質問があります」</p>
-                {sessionName && <p className="text-xs mt-4 text-gray-400">モデル: {sessionName}</p>}
+                {sessionName && <p className="text-xs mt-4 text-gray-400">デフォルトモデル: {getModelDisplayName(sessionName)}</p>}
               </>
             )}
           </div>
@@ -73,7 +82,9 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
                 </p>
                 <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString()}
-                  {message.isStreaming && ' (ストリーミング中...)'}
+                  {message.isStreaming ? ' (ストリーミング中...)' : ''}
+                  {message.modelName && message.role === 'assistant' && !message.isStreaming &&
+                    ` - ${getModelDisplayName(message.modelName)}`}
                 </div>
               </div>
             </div>

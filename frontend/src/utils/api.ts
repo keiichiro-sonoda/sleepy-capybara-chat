@@ -102,6 +102,7 @@ export type ChatMessage = {
   role: string;
   content: string;
   created_at: string;
+  model_name?: string;
 };
 
 // 新しいチャットセッションを作成
@@ -122,11 +123,16 @@ export const getChatMessages = async (sessionId: number): Promise<ChatMessage[]>
 };
 
 // メッセージを送信して応答を取得（非ストリーム）
-export const sendChatMessage = async (sessionId: number, content: string): Promise<ChatResponse> => {
+export const sendChatMessage = async (
+  sessionId: number,
+  content: string,
+  modelName?: string
+): Promise<ChatResponse> => {
   return await authPost<ChatResponse>(`/v1/chat/sessions/${sessionId}/messages`, {
     content,
     role: "user",
-    stream: false
+    stream: false,
+    model_name: modelName // モデル名を指定（省略可能）
   });
 };
 
@@ -136,7 +142,8 @@ export const sendChatMessageStreaming = async (
   content: string,
   onChunk: (chunk: string) => void,
   onComplete: (fullResponse: string) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  modelName?: string
 ): Promise<void> => {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -154,7 +161,8 @@ export const sendChatMessageStreaming = async (
       body: JSON.stringify({
         content,
         role: "user",
-        stream: true
+        stream: true,
+        model_name: modelName // モデル名を指定（省略可能）
       })
     });
 

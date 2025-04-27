@@ -24,7 +24,7 @@ type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  isStreaming?: boolean; // ストリーミング中かどうかを示すフラグ
+  isStreaming?: boolean;
 };
 
 function ChatContent() {
@@ -148,104 +148,123 @@ function ChatContent() {
   };
 
   // メッセージ送信処理
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: content,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+  const handleSendMessage = async (message: string) => {
     setIsLoading(true);
     setError(null);
-
     try {
+      const isNewChat = !currentSession;
       let sessionId = currentSession?.id;
 
-      // 新規チャットモードで、まだセッションがない場合は作成する
-      if (isNewChat && !currentSession) {
-        const newSession = await createNewSession(selectedModel);
-        sessionId = newSession.id;
-        setIsNewChat(false);
+      // 新規チャットの場合はセッションを作成
+      if (isNewChat) {
+        try {
+          const newSession = await createNewSession(selectedModel);
+          sessionId = newSession.id;
+          setIsNewChat(false);
+        } catch (err) {
+          console.error('Failed to create chat session:', err);
+          setError('チャットセッションの作成に失敗しました');
+          setIsLoading(false);
+          return;
+        }
       }
 
-      // メッセージ数をカウント（最初のメッセージかどうかを判定するため）
-      const isFirstMessage = messages.length === 0;
+      // ユーザーメッセージを追加
+      const userMessage: Message = {
+        id: `temp-${Date.now()}`,
+        content: message,
+        role: 'user',
+        timestamp: new Date()
+      };
+
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+
+      // AIメッセージの一時プレースホルダー
+      const aiMessageId = `temp-${Date.now() + 1}`;
+      const aiMessage: Message = {
+        id: aiMessageId,
+        content: '',
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: true
+      };
 
       if (useStreaming) {
-        // ストリーミングモードでのメッセージ送信
-        // 最初に空のアシスタントメッセージを追加
-        const tempAssistantId = (Date.now() + 1).toString();
-        const assistantMessage: Message = {
-          id: tempAssistantId,
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          isStreaming: true
-        };
+        // ストリーミングモードでメッセージを送信
+        setMessages([...newMessages, aiMessage]);
 
-        setMessages(prev => [...prev, assistantMessage]);
-
-        // ストリーミングリクエストを送信
-        await sendChatMessageStreaming(
-          sessionId!,
-          content,
-          // チャンク受信時のコールバック
-          (chunk: string) => {
-            setMessages(prev => prev.map(msg =>
-              msg.id === tempAssistantId
-                ? { ...msg, content: msg.content + chunk }
-                : msg
-            ));
-          },
-          // 完了時のコールバック
-          async (fullResponse: string) => {
-            setMessages(prev => prev.map(msg =>
-              msg.id === tempAssistantId
-                ? { ...msg, content: fullResponse, isStreaming: false }
-                : msg
-            ));
-            // 最初のメッセージだった場合は、セッション一覧を更新
-            if (isFirstMessage) {
+        try {
+          await sendChatMessageStreaming(
+            sessionId!,
+            message,
+            // チャンク受信時のコールバック
+            (chunk: string) => {
+              setMessages(prev => prev.map(msg =>
+                msg.id === aiMessageId
+                  ? { ...msg, content: msg.content + chunk }
+                  : msg
+              ));
+            },
+            // 完了時のコールバック
+            async (fullResponse: string) => {
+              setMessages(prev => prev.map(msg =>
+                msg.id === aiMessageId
+                  ? { ...msg, content: fullResponse, isStreaming: false }
+                  : msg
+              ));
+              // 最新のセッション一覧を取得
               await fetchSessions();
-            }
-            setIsLoading(false);
-          },
-          // エラー時のコールバック
-          (errorMsg: string) => {
-            setError(`AIからの応答の取得に失敗しました: ${errorMsg}`);
-            setMessages(prev => prev.map(msg =>
-              msg.id === tempAssistantId
-                ? { ...msg, content: 'エラーが発生しました', isStreaming: false }
-                : msg
-            ));
-            setIsLoading(false);
-          }
-        );
-      } else {
-        // 非ストリーミングモードでのメッセージ送信（従来の実装）
-        const response = await sendChatMessage(sessionId!, content);
-
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: response.response,
-          timestamp: new Date()
-        };
-
-        setMessages(prev => [...prev, assistantMessage]);
-        // 最初のメッセージだった場合は、セッション一覧を更新
-        if (isFirstMessage) {
-          await fetchSessions();
+            },
+            // エラー時のコールバック
+            (errorMsg: string) => {
+              setError(`AIからの応答の取得に失敗しました: ${errorMsg}`);
+              setMessages(prev => prev.map(msg =>
+                msg.id === aiMessageId
+                  ? { ...msg, content: 'エラーが発生しました', isStreaming: false }
+                  : msg
+              ));
+            },
+            // 使用するモデル
+            selectedModel
+          );
+        } catch (error) {
+          console.error('Streaming error:', error);
+          setError('ストリーミング中にエラーが発生しました');
         }
-        setIsLoading(false);
+      } else {
+        // 非ストリーミングモードでメッセージを送信
+        const waitingMessage: Message = {
+          ...aiMessage,
+          content: '応答を待っています...'
+        };
+        setMessages([...newMessages, waitingMessage]);
+
+        try {
+          const response = await sendChatMessage(sessionId!, message, selectedModel);
+
+          const completedMessage: Message = {
+            id: aiMessageId,
+            content: response.response,
+            role: 'assistant',
+            timestamp: new Date()
+          };
+
+          setMessages(prev =>
+            prev.map(msg => msg.id === aiMessageId ? completedMessage : msg)
+          );
+
+          // 最新のセッション一覧を取得
+          await fetchSessions();
+        } catch (error) {
+          console.error('Chat message error:', error);
+          setError('メッセージの送信に失敗しました');
+        }
       }
     } catch (error) {
-      console.error('Failed to get AI response:', error);
-      setError('AIからの応答の取得に失敗しました。もう一度お試しください。');
+      console.error('Failed to send message:', error);
+      setError('メッセージの送信中にエラーが発生しました');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -266,10 +285,10 @@ function ChatContent() {
         user={user}
         onLogout={logout}
         onHome={() => router.push('/')}
-        currentModel={currentSession?.model_name || selectedModel}
+        currentModel={selectedModel}
         useStreaming={useStreaming}
         onToggleStreaming={toggleStreamingMode}
-        onModelChange={isNewChat ? handleModelChange : undefined}
+        onModelChange={handleModelChange}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -296,8 +315,9 @@ function ChatContent() {
           <ChatInput
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
-            disabled={false} // 常に入力可能に設定
+            disabled={!currentSession && messages.length > 0}
             isStreaming={useStreaming}
+            currentModel={selectedModel}
           />
         </div>
       </div>

@@ -1,19 +1,28 @@
 import { useState, FormEvent } from 'react';
+import { AVAILABLE_MODELS } from '@/utils/constants';
 
 type ChatInputProps = {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   disabled: boolean;
   isStreaming?: boolean;
+  currentModel?: string;
 };
 
-const ChatInput = ({ onSendMessage, isLoading, disabled, isStreaming = true }: ChatInputProps) => {
+const ChatInput = ({
+  onSendMessage,
+  isLoading,
+  disabled,
+  isStreaming = true,
+  currentModel = 'llama3'
+}: ChatInputProps) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isLoading || disabled) return;
 
+    // ヘッダーで選択されたモデルのみを使用（暗黙的に渡される）
     onSendMessage(message);
     setMessage('');
   };
@@ -33,8 +42,8 @@ const ChatInput = ({ onSendMessage, isLoading, disabled, isStreaming = true }: C
           type="submit"
           disabled={isLoading || disabled || !message.trim()}
           className={`rounded-full p-2 ${isLoading || disabled || !message.trim()
-              ? 'bg-gray-300 text-gray-500'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+            ? 'bg-gray-300 text-gray-500'
+            : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
         >
           {isLoading ? (
@@ -49,11 +58,12 @@ const ChatInput = ({ onSendMessage, isLoading, disabled, isStreaming = true }: C
           )}
         </button>
       </form>
-      {isStreaming && (
-        <div className="max-w-3xl mx-auto mt-1">
-          <p className="text-xs text-gray-500">ストリーミングモード: 文章がリアルタイムで生成されます</p>
-        </div>
-      )}
+
+      <div className="max-w-3xl mx-auto mt-1 flex justify-between text-xs text-gray-500">
+        <p>
+          {isStreaming && "ストリーミングモード: 文章がリアルタイムで生成されます"}
+        </p>
+      </div>
     </div>
   );
 };
