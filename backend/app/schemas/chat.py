@@ -1,6 +1,5 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
-from typing import Literal
 
 
 class MessageBase(BaseModel):
@@ -10,6 +9,7 @@ class MessageBase(BaseModel):
 
 class MessageCreate(MessageBase):
     stream: bool = False
+    model_name: str = "llama3"  # デフォルトでllama3を使用
 
 
 class Message(MessageBase):
@@ -17,18 +17,18 @@ class Message(MessageBase):
     session_id: int
     created_at: datetime
     updated_at: datetime | None = None
+    model_name: str  # 使用されたモデル名（必須）
     model_config = ConfigDict(from_attributes=True)
 
 
 class ChatSessionBase(BaseModel):
-    model_name: str = "llama3"
+    # model_name フィールドを削除
     name: str | None = None
 
 
 class ChatSessionCreate(ChatSessionBase):
-    # サポートされるモデル名をLiteralで指定することで型チェックが可能になります
-    # ただし、拡張性を考慮して単純なstrのままにしておくことも選択肢です
-    model_name: str = "llama3"
+    # model_name フィールドを削除
+    pass
 
 
 class ChatSession(ChatSessionBase):

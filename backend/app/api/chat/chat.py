@@ -33,7 +33,7 @@ async def create_chat_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatSession:
-    db_session = ChatSession(user_id=current_user.id, model_name=session.model_name)
+    db_session = ChatSession(user_id=current_user.id, name=session.name)
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
@@ -93,8 +93,16 @@ async def create_message(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
         )
 
-    # ユーザーメッセージの保存
-    user_message = Message(session_id=session_id, role="user", content=message.content)
+    # 使用するモデル名（MessageCreateのデフォルト値により常に値があります）
+    model_to_use = message.model_name
+
+    # ユーザーメッセージの保存（モデル名を含める）
+    user_message = Message(
+        session_id=session_id,
+        role="user",
+        content=message.content,
+        model_name=model_to_use,  # 必ずモデル名を保存
+    )
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
@@ -124,22 +132,23 @@ async def create_message(
     # ストリーミングモードの場合
     if message.stream:
         return StreamingResponse(
-            _stream_chat_response(
-                session_id, formatted_messages, chat_session.model_name, db
-            ),
+            _stream_chat_response(session_id, formatted_messages, model_to_use, db),
             media_type="text/event-stream",
         )
 
     # 非ストリーミングモードの場合
     try:
         response_data = await ChatService.get_chat_response(
-            formatted_messages, chat_session.model_name, stream=False
+            formatted_messages, model_to_use, stream=False
         )
         ai_response = response_data["message"]["content"]
 
-        # AIのレスポンスを保存
+        # AIのレスポンスを保存（モデル名を含める）
         ai_message = Message(
-            session_id=session_id, role="assistant", content=ai_response
+            session_id=session_id,
+            role="assistant",
+            content=ai_response,
+            model_name=model_to_use,  # 使用したモデル名を保存
         )
         db.add(ai_message)
         db.commit()
@@ -208,6 +217,7 @@ async def _stream_chat_response(
                     session_id=session_id,
                     role="assistant",
                     content=complete_response,
+                    model_name=model_name,  # 使用したモデル名を保存
                 )
                 db.add(ai_message)
                 db.commit()
@@ -248,6 +258,7 @@ async def _stream_chat_response(
                     session_id=session_id,
                     role="assistant",
                     content=complete_response,
+                    model_name=model_name,  # 使用したモデル名を保存
                 )
                 db.add(ai_message)
                 db.commit()
