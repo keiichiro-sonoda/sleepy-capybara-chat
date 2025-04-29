@@ -232,6 +232,7 @@ async def _stream_chat_response(
                         "event": "done",
                         "content": complete_response,
                         "session_id": session_id,
+                        "model_name": model_name,  # モデル名を追加
                     }
                 ) + "\n\n"
 
@@ -272,6 +273,7 @@ async def _stream_chat_response(
                         "event": "done",
                         "content": complete_response,
                         "session_id": session_id,
+                        "model_name": model_name,  # モデル名を追加
                     }
                 ) + "\n\n"
 
