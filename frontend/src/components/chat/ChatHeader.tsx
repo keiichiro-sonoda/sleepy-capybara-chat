@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { AVAILABLE_MODELS, AIModel } from '@/utils/constants';
+import { useRouter } from 'next/navigation';
 
 type ChatHeaderProps = {
   user: ReturnType<typeof useAuth>['user'];
@@ -20,6 +21,8 @@ const ChatHeader = ({
   onToggleStreaming,
   onModelChange
 }: ChatHeaderProps) => {
+  const router = useRouter();
+
   return (
     <header className="bg-gray-800 text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
@@ -66,8 +69,14 @@ const ChatHeader = ({
           </div>
 
           {user && (
-            <div className="flex items-center">
+            <div className="flex items-center space-x-2">
               <span className="mr-2 text-sm hidden md:inline">{user.email}</span>
+              <button
+                onClick={() => router.push('/profile')}
+                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+              >
+                プロフィール
+              </button>
               <button
                 onClick={onLogout}
                 className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
@@ -82,4 +91,4 @@ const ChatHeader = ({
   );
 };
 
-export default ChatHeader; 
+export default ChatHeader;

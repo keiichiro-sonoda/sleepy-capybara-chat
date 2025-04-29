@@ -82,6 +82,25 @@ export const fetchCurrentUser = async (): Promise<User> => {
   return await authGet<User>('/v1/auth/me');
 };
 
+// トークン使用量の型定義
+export type TokenUsageStats = {
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+};
+
+export type TokenUsageByModel = {
+  model_name: string;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+};
+
+// モデルごとのトークン使用量を取得
+export const fetchTokenUsageByModel = async (days: number = 30): Promise<TokenUsageByModel[]> => {
+  return await authGet<TokenUsageByModel[]>(`/v1/users/me/token-usage/by-model?days=${days}`);
+};
+
 // チャットセッション関連の型定義
 export type ChatSession = {
   id: number;
