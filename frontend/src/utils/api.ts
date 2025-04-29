@@ -141,7 +141,7 @@ export const sendChatMessageStreaming = async (
   sessionId: number,
   content: string,
   onChunk: (chunk: string) => void,
-  onComplete: (fullResponse: string) => void,
+  onComplete: (fullResponse: string, modelName?: string) => void,
   onError: (error: string) => void,
   modelName?: string
 ): Promise<void> => {
@@ -200,7 +200,7 @@ export const sendChatMessageStreaming = async (
           if (eventData.event === 'chunk' && eventData.content) {
             onChunk(eventData.content);
           } else if (eventData.event === 'done') {
-            onComplete(eventData.content);
+            onComplete(eventData.content, eventData.model_name);
             return;
           } else if (eventData.event === 'error') {
             onError(eventData.message || 'Unknown error');

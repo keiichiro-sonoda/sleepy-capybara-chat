@@ -25,6 +25,7 @@ type Message = {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  modelName?: string;
 };
 
 function ChatContent() {
@@ -99,7 +100,8 @@ function ChatContent() {
         id: msg.id.toString(),
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
-        timestamp: new Date(msg.created_at)
+        timestamp: new Date(msg.created_at),
+        modelName: msg.model_name
       }));
 
       setMessages(formattedMessages);
@@ -174,7 +176,8 @@ function ChatContent() {
         id: `temp-${Date.now()}`,
         content: message,
         role: 'user',
-        timestamp: new Date()
+        timestamp: new Date(),
+        modelName: selectedModel
       };
 
       const newMessages = [...messages, userMessage];
@@ -187,7 +190,8 @@ function ChatContent() {
         content: '',
         role: 'assistant',
         timestamp: new Date(),
-        isStreaming: true
+        isStreaming: true,
+        modelName: selectedModel
       };
 
       if (useStreaming) {
@@ -207,10 +211,15 @@ function ChatContent() {
               ));
             },
             // 完了時のコールバック
-            async (fullResponse: string) => {
+            async (fullResponse: string, responseModelName?: string) => {
               setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId
-                  ? { ...msg, content: fullResponse, isStreaming: false }
+                  ? {
+                    ...msg,
+                    content: fullResponse,
+                    isStreaming: false,
+                    modelName: responseModelName || selectedModel
+                  }
                   : msg
               ));
               // 最新のセッション一覧を取得
@@ -236,7 +245,8 @@ function ChatContent() {
         // 非ストリーミングモードでメッセージを送信
         const waitingMessage: Message = {
           ...aiMessage,
-          content: '応答を待っています...'
+          content: '応答を待っています...',
+          isStreaming: true  // isStreamingフラグは維持（ローディングインジケータのため）
         };
         setMessages([...newMessages, waitingMessage]);
 
@@ -247,7 +257,9 @@ function ChatContent() {
             id: aiMessageId,
             content: response.response,
             role: 'assistant',
-            timestamp: new Date()
+            timestamp: new Date(),
+            modelName: selectedModel,
+            isStreaming: false  // 明示的にfalseに設定
           };
 
           setMessages(prev =>

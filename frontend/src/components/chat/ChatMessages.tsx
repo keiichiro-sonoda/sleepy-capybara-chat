@@ -23,7 +23,7 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
 
   // モデル名から表示用の名前を取得
   const getModelDisplayName = (modelId?: string): string => {
-    if (!modelId) return '';
+    if (!modelId) return 'Unknown';
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
     return model ? model.name : modelId;
   };
@@ -32,6 +32,19 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // メッセージの状態に応じたステータスメッセージを返す
+  const getStatusMessage = (message: Message): string => {
+    if (!message.isStreaming) return '';
+
+    // コンテンツが空の場合は生成開始前
+    if (!message.content || message.content === '') {
+      return '応答を準備中...';
+    }
+
+    // コンテンツがある場合は生成中
+    return '回答生成中...';
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -74,6 +87,11 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
                   : 'bg-gray-200 text-gray-800 rounded-bl-none'
                   }`}
               >
+                {message.role === 'assistant' && message.modelName && !message.isStreaming && (
+                  <div className="text-xs font-medium mb-2 text-gray-600 bg-gray-100 px-2 py-1 rounded inline-block">
+                    {getModelDisplayName(message.modelName)}
+                  </div>
+                )}
                 <p className="whitespace-pre-wrap">
                   {message.content}
                   {message.isStreaming && (
@@ -82,9 +100,7 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
                 </p>
                 <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString()}
-                  {message.isStreaming ? ' (ストリーミング中...)' : ''}
-                  {message.modelName && message.role === 'assistant' && !message.isStreaming &&
-                    ` - ${getModelDisplayName(message.modelName)}`}
+                  {message.isStreaming ? ` (${getStatusMessage(message)})` : ''}
                 </div>
               </div>
             </div>
