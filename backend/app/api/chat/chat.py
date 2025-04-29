@@ -19,6 +19,7 @@ from app.schemas.chat import (
     ChatResponse,
 )
 from app.services.chat import ChatService
+from app.services.token_usage import TokenUsageService
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -93,15 +94,22 @@ async def create_message(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
         )
 
-    # 使用するモデル名（MessageCreateのデフォルト値により常に値があります）
-    model_to_use = message.model_name
+    # トークン制限チェック
+    is_allowed, limit_message = await TokenUsageService.check_token_limit(
+        db, current_user.id, message.model_name
+    )
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=limit_message,
+        )
 
     # ユーザーメッセージの保存（モデル名を含める）
     user_message = Message(
         session_id=session_id,
         role="user",
         content=message.content,
-        model_name=model_to_use,  # 必ずモデル名を保存
+        model_name=message.model_name,
     )
     db.add(user_message)
     db.commit()
@@ -109,14 +117,14 @@ async def create_message(
 
     # セッション内の最初のメッセージの場合、セッション名を生成
     message_count = db.query(Message).filter(Message.session_id == session_id).count()
-    if message_count == 1:  # 最初のメッセージ
+    if message_count == 1:
         session_name = await ChatService.generate_session_name_from_message(
             message.content
         )
         chat_session.name = session_name
         db.commit()
 
-    # 会話履歴を取得（現在のセッションの全メッセージ）
+    # 会話履歴を取得
     chat_history = (
         db.query(Message)
         .filter(Message.session_id == session_id)
@@ -124,7 +132,6 @@ async def create_message(
         .all()
     )
 
-    # メッセージを整形
     formatted_messages = [
         {"role": msg.role, "content": msg.content} for msg in chat_history
     ]
@@ -132,23 +139,46 @@ async def create_message(
     # ストリーミングモードの場合
     if message.stream:
         return StreamingResponse(
-            _stream_chat_response(session_id, formatted_messages, model_to_use, db),
+            _stream_chat_response(
+                session_id, formatted_messages, message.model_name, db, current_user.id
+            ),
             media_type="text/event-stream",
         )
 
     # 非ストリーミングモードの場合
     try:
         response_data = await ChatService.get_chat_response(
-            formatted_messages, model_to_use, stream=False
+            formatted_messages, message.model_name, stream=False
         )
-        ai_response = response_data["message"]["content"]
+        ai_response = response_data["content"]
 
-        # AIのレスポンスを保存（モデル名を含める）
+        # トークン使用量のログ出力を追加
+        if "token_usage" in response_data:
+            token_usage = response_data["token_usage"]
+            logger.info(
+                f"Token usage (non-streaming) - model: {message.model_name}, "
+                f"prompt: {token_usage.get('prompt_tokens', 0)}, "
+                f"completion: {token_usage.get('completion_tokens', 0)}, "
+                f"total: {token_usage.get('total_tokens', 0)}"
+            )
+            await TokenUsageService.record_token_usage(
+                db,
+                current_user.id,
+                message.model_name,
+                token_usage["prompt_tokens"],
+                token_usage["completion_tokens"],
+            )
+        else:
+            logger.warning(
+                f"No token usage information in response from {message.model_name}"
+            )
+
+        # AIのレスポンスを保存
         ai_message = Message(
             session_id=session_id,
             role="assistant",
             content=ai_response,
-            model_name=model_to_use,  # 使用したモデル名を保存
+            model_name=message.model_name,
         )
         db.add(ai_message)
         db.commit()
@@ -162,30 +192,42 @@ async def create_message(
         )
 
 
-# ストリーミングレスポンスを処理する非同期ジェネレータ
+# ストリーミングレスポンスを処理する非同期ジェネレータを更新
 async def _stream_chat_response(
-    session_id: int, messages: list, model_name: str, db: Session
+    session_id: int,
+    messages: list,
+    model_name: str,
+    db: Session,
+    user_id: int,
 ) -> typing.AsyncGenerator[str, None]:
-    # 開始ログ
     logger.info(
         f"Starting streaming response for session_id={session_id}, model={model_name}"
     )
 
-    # 最終的な完全なAI応答を保持する変数
     complete_response = ""
+    token_usage = None
 
-    # SSE (Server-Sent Events)形式のヘッダーを送信
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
 
     try:
-        # ジェネレータを使用して結果を取得
         chat_response_gen = await ChatService.get_chat_response(
             messages, model_name, stream=True
         )
 
         chunk_count = 0
-        # チャンク処理
-        async for chunk, is_done in chat_response_gen:
+        async for chunk_data in chat_response_gen:
+            # 必要な値を抽出（chunk, is_done, usageの3つの値）
+            if len(chunk_data) == 3:
+                chunk, is_done, usage = chunk_data
+                # トークン使用量情報があれば詳細をログに出力
+                if usage and isinstance(usage, dict) and usage:
+                    logger.debug(f"Token usage info from chunk {chunk_count}: {usage}")
+            else:
+                # 後方互換性のために2つの値の場合も対応
+                chunk, is_done = chunk_data
+                usage = {}
+                logger.debug(f"No usage info in chunk {chunk_count}")
+
             chunk_count += 1
             logger.debug(
                 f"Chunk #{chunk_count} received: length={len(chunk) if chunk else 0}, is_done={is_done}"
@@ -193,63 +235,95 @@ async def _stream_chat_response(
 
             if chunk:
                 complete_response += chunk
-                # クライアントにチャンクを送信
                 yield "data: " + json.dumps(
                     {"event": "chunk", "content": chunk}
                 ) + "\n\n"
 
             if is_done:
-                # ログ追加：保存前の状態確認
                 logger.info(
                     f"Saving AI response to DB: session_id={session_id}, content_length={len(complete_response)}, chunks_processed={chunk_count}"
                 )
 
-                # 空の応答をチェック
                 if not complete_response:
                     logger.warning(
                         f"Empty response detected for session_id={session_id}"
                     )
-                    # 空の場合でもエラーにせず保存
                     complete_response = "応答を生成できませんでした。"
 
-                # 完全な応答をDBに保存
+                # トークン使用量を記録
+                if usage:
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    total_tokens = usage.get(
+                        "total_tokens", prompt_tokens + completion_tokens
+                    )
+
+                    logger.info(
+                        f"Token usage (streaming) - model: {model_name}, "
+                        f"prompt: {prompt_tokens}, completion: {completion_tokens}, total: {total_tokens}"
+                    )
+
+                    token_usage = await TokenUsageService.record_token_usage(
+                        db,
+                        user_id,
+                        model_name,
+                        prompt_tokens,
+                        completion_tokens,
+                    )
+                else:
+                    logger.warning(
+                        f"No token usage information in final streaming chunk from {model_name}"
+                    )
+
                 ai_message = Message(
                     session_id=session_id,
                     role="assistant",
                     content=complete_response,
-                    model_name=model_name,  # 使用したモデル名を保存
+                    model_name=model_name,
                 )
                 db.add(ai_message)
                 db.commit()
-                db.refresh(ai_message)  # IDを取得するためにリフレッシュ
+                db.refresh(ai_message)
 
-                # ログ追加：保存後の確認
                 logger.info(f"AI response saved to DB: message_id={ai_message.id}")
 
-                # クライアントに完了イベントを送信
+                # SQLAlchemyオブジェクトを辞書に変換
+                token_usage_dict = None
+                if token_usage:
+                    token_usage_dict = {
+                        "id": token_usage.id,
+                        "user_id": token_usage.user_id,
+                        "model_name": token_usage.model_name,
+                        "prompt_tokens": token_usage.prompt_tokens,
+                        "completion_tokens": token_usage.completion_tokens,
+                        "total_tokens": token_usage.total_tokens,
+                        "timestamp": (
+                            str(token_usage.timestamp)
+                            if token_usage.timestamp
+                            else None
+                        ),
+                    }
+
                 yield "data: " + json.dumps(
                     {
                         "event": "done",
                         "content": complete_response,
                         "session_id": session_id,
-                        "model_name": model_name,  # モデル名を追加
+                        "model_name": model_name,
+                        "token_usage": token_usage_dict,
                     }
                 ) + "\n\n"
 
-                # 保存処理とクライアント通知が完了
                 logger.info(f"Streaming response completed for session_id={session_id}")
                 break
 
-            # 少し待機して、クライアントに処理時間を与える
             await asyncio.sleep(0.01)
 
-        # 全てのチャンクを処理したが、is_doneを受け取らなかった場合
         if not is_done:
             logger.warning(
                 f"Stream completed without is_done signal for session_id={session_id}"
             )
 
-            # それでも応答があれば保存する
             if complete_response:
                 logger.info(
                     f"Saving AI response anyway: session_id={session_id}, content_length={len(complete_response)}"
@@ -259,7 +333,7 @@ async def _stream_chat_response(
                     session_id=session_id,
                     role="assistant",
                     content=complete_response,
-                    model_name=model_name,  # 使用したモデル名を保存
+                    model_name=model_name,
                 )
                 db.add(ai_message)
                 db.commit()
@@ -267,20 +341,35 @@ async def _stream_chat_response(
 
                 logger.info(f"AI response saved to DB: message_id={ai_message.id}")
 
-                # クライアントに完了イベントを送信
+                # SQLAlchemyオブジェクトを辞書に変換
+                token_usage_dict = None
+                if token_usage:
+                    token_usage_dict = {
+                        "id": token_usage.id,
+                        "user_id": token_usage.user_id,
+                        "model_name": token_usage.model_name,
+                        "prompt_tokens": token_usage.prompt_tokens,
+                        "completion_tokens": token_usage.completion_tokens,
+                        "total_tokens": token_usage.total_tokens,
+                        "timestamp": (
+                            str(token_usage.timestamp)
+                            if token_usage.timestamp
+                            else None
+                        ),
+                    }
+
                 yield "data: " + json.dumps(
                     {
                         "event": "done",
                         "content": complete_response,
                         "session_id": session_id,
-                        "model_name": model_name,  # モデル名を追加
+                        "model_name": model_name,
+                        "token_usage": token_usage_dict,
                     }
                 ) + "\n\n"
 
     except Exception as e:
-        logger.error(
-            f"Error in streaming response: {e}", exc_info=True
-        )  # スタックトレースも出力
+        logger.error(f"Error in streaming response: {e}", exc_info=True)
         yield "data: " + json.dumps({"event": "error", "message": str(e)}) + "\n\n"
 
 

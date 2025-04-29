@@ -13,8 +13,8 @@ class TokenUsage(Base):
         Integer, ForeignKey("chat_sessions.id"), nullable=True, index=True
     )  # オプショナル：どのセッションでの使用か
     model_name = Column(String(255), nullable=False, index=True)
-    input_tokens = Column(Integer, nullable=False, default=0)
-    output_tokens = Column(Integer, nullable=False, default=0)
+    prompt_tokens = Column(Integer, nullable=False, default=0)
+    completion_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(
         Integer, nullable=False, default=0
     )  # 計算フィールドだが保存しておくと便利
@@ -26,4 +26,4 @@ class TokenUsage(Base):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.total_tokens = self.input_tokens + self.output_tokens
+        self.total_tokens = self.prompt_tokens + self.completion_tokens

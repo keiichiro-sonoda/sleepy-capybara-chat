@@ -73,7 +73,7 @@ class ChatService:
     @staticmethod
     async def get_chat_response(
         messages: list[dict[str, str]], model_name: str, stream: bool = False
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
         provider_name, actual_model = ChatService.get_provider_from_model(model_name)
         logger.debug(

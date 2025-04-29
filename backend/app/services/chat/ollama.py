@@ -8,6 +8,8 @@ from app.services.chat.base import ModelProvider
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 
 class OllamaProvider(ModelProvider):
     """Ollamaモデルプロバイダの実装"""
@@ -17,7 +19,7 @@ class OllamaProvider(ModelProvider):
 
     async def chat_completion(
         self, messages: list[dict[str, str]], model_name: str, stream: bool = False
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool], None]:
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
         """Ollamaのチャットエンドポイントを呼び出す"""
         request_data = {
             "model": model_name,
@@ -44,14 +46,35 @@ class OllamaProvider(ModelProvider):
                 )
 
             response_data = response.json()
-            logger.info(f"Received response from Ollama API: {response_data}")
-            return response_data
+
+            # トークン使用量を詳細にログ出力
+            prompt_eval_count = response_data.get("prompt_eval_count", 0)
+            eval_count = response_data.get("eval_count", 0)
+            total_tokens = prompt_eval_count + eval_count
+
+            logger.info(
+                f"Ollama API token counts - prompt_eval_count: {prompt_eval_count}, "
+                f"eval_count: {eval_count}, total: {total_tokens}"
+            )
+            logger.debug(f"Complete Ollama API response: {response_data}")
+
+            token_usage = {
+                "prompt_tokens": prompt_eval_count,
+                "completion_tokens": eval_count,
+                "total_tokens": total_tokens,
+            }
+
+            return {
+                "content": response_data.get("message", {}).get("content", ""),
+                "token_usage": token_usage,
+            }
 
     async def _stream_chat_response(
         self, request_data: dict
-    ) -> AsyncGenerator[tuple[str, bool], None]:
+    ) -> AsyncGenerator[tuple[str, bool, dict], None]:
         """Ollamaストリーミングレスポンスをジェネレータとして処理"""
         complete_response = ""
+        token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -70,34 +93,35 @@ class OllamaProvider(ModelProvider):
 
                     try:
                         data = json.loads(line)
-
-                        # 応答テキストを取得
                         chunk = data.get("message", {}).get("content", "")
                         is_done = data.get("done", False)
 
-                        # ログを追加して状態を確認
-                        logger.debug(
-                            f"Ollama stream chunk: length={len(chunk) if chunk else 0}, is_done={is_done}"
-                        )
+                        if is_done:
+                            # 最終チャンクからトークン数を取得
+                            prompt_eval_count = data.get("prompt_eval_count", 0)
+                            eval_count = data.get("eval_count", 0)
+                            total_tokens = prompt_eval_count + eval_count
 
+                            token_usage = {
+                                "prompt_tokens": prompt_eval_count,
+                                "completion_tokens": eval_count,
+                                "total_tokens": total_tokens,
+                            }
+
+                            logger.info(
+                                f"Ollama streaming final token counts - prompt_eval_count: {prompt_eval_count}, "
+                                f"eval_count: {eval_count}, total: {total_tokens}"
+                            )
+                            logger.debug(f"Final streaming chunk data: {data}")
+
+                        # チャンク、完了フラグ、トークン使用量を返す
                         if chunk:
                             complete_response += chunk
-                            # is_doneと一緒にチャンクを送信
-                            yield (chunk, is_done)
+                            yield (chunk, is_done, token_usage if is_done else {})
 
-                        # 完了フラグがTrueの場合
                         if is_done:
-                            # 最後のチャンクのみで完了する場合はすでに送信されているので、
-                            # 追加のチャンクがない場合でも、もう一度完了フラグをTrueで送信する
-                            if not chunk:
-                                logger.info(
-                                    f"Stream done with no final chunk, sending final done signal"
-                                )
-                                # 空文字を送信し、is_done=Trueを知らせる
-                                yield ("", True)
                             break
 
-                        # 少し待機
                         await asyncio.sleep(0.01)
 
                     except json.JSONDecodeError as e:
@@ -105,13 +129,14 @@ class OllamaProvider(ModelProvider):
                         continue
                     except Exception as e:
                         logger.error(f"Error processing stream: {e}")
-                        raise Exception(f"Error processing stream: {e}")
+                        raise
 
                 # ストリームが終了したが、is_doneが送られてこなかった場合のフォールバック
-                logger.info(
-                    f"Stream ended without explicit done flag, sending final done signal"
-                )
-                yield ("", True)
+                if not is_done:
+                    logger.warning(
+                        "Stream ended without explicit done flag, sending empty token usage"
+                    )
+                    yield ("", True, token_usage)
 
     async def text_generation(self, prompt: str, model_name: str) -> str:
         """Ollamaのテキスト生成エンドポイントを呼び出す"""
@@ -137,4 +162,4 @@ class OllamaProvider(ModelProvider):
 
         except Exception as e:
             logger.error(f"Error generating text: {e}")
-            return "" 
+            return ""
