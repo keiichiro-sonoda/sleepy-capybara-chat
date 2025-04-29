@@ -19,4 +19,11 @@ class TokenUsage(TokenUsageBase):
     created_at: datetime
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+
+class TokenUsageByModel(BaseModel):
+    model_name: str
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_tokens: int

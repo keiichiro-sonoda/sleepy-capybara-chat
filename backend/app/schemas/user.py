@@ -15,3 +15,8 @@ class UserList(UserBase):
 
     class Config:
         from_attributes = True
+
+
+# Userスキーマを追加 (UserListと同じ内容)
+class User(UserList):
+    pass
