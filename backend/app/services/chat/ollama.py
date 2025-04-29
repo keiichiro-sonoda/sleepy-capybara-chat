@@ -74,7 +74,8 @@ class OllamaProvider(ModelProvider):
     ) -> AsyncGenerator[tuple[str, bool, dict], None]:
         """Ollamaストリーミングレスポンスをジェネレータとして処理"""
         complete_response = ""
-        token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        # 初期値は空の辞書にしておく
+        token_usage = {}
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -87,6 +88,7 @@ class OllamaProvider(ModelProvider):
                     )
                     raise Exception(f"Error from Ollama API: {response.status_code}")
 
+                final_chunk_processed = False  # 最終チャンク処理済みフラグ
                 async for line in response.aiter_lines():
                     if not line:
                         continue
@@ -95,6 +97,12 @@ class OllamaProvider(ModelProvider):
                         data = json.loads(line)
                         chunk = data.get("message", {}).get("content", "")
                         is_done = data.get("done", False)
+                        current_usage = {}  # このチャンクで返すusage
+
+                        if chunk:
+                            complete_response += chunk
+                            # 中間チャンクではコンテンツのみを返す
+                            yield (chunk, False, {})
 
                         if is_done:
                             # 最終チャンクからトークン数を取得
@@ -102,11 +110,12 @@ class OllamaProvider(ModelProvider):
                             eval_count = data.get("eval_count", 0)
                             total_tokens = prompt_eval_count + eval_count
 
-                            token_usage = {
+                            token_usage = {  # 確定したトークン数を格納
                                 "prompt_tokens": prompt_eval_count,
                                 "completion_tokens": eval_count,
                                 "total_tokens": total_tokens,
                             }
+                            current_usage = token_usage  # この最終チャンクで返すusage
 
                             logger.info(
                                 f"Ollama streaming final token counts - prompt_eval_count: {prompt_eval_count}, "
@@ -114,13 +123,11 @@ class OllamaProvider(ModelProvider):
                             )
                             logger.debug(f"Final streaming chunk data: {data}")
 
-                        # チャンク、完了フラグ、トークン使用量を返す
-                        if chunk:
-                            complete_response += chunk
-                            yield (chunk, is_done, token_usage if is_done else {})
-
-                        if is_done:
-                            break
+                            # 最終チャンクを処理したことをマーク
+                            final_chunk_processed = True
+                            # 空のチャンクと完了フラグ、トークン使用量を返す
+                            yield ("", True, current_usage)
+                            break  # is_doneが来たらループを抜ける
 
                         await asyncio.sleep(0.01)
 
@@ -131,12 +138,14 @@ class OllamaProvider(ModelProvider):
                         logger.error(f"Error processing stream: {e}")
                         raise
 
-                # ストリームが終了したが、is_doneが送られてこなかった場合のフォールバック
-                if not is_done:
+                # ループが正常に終了したが is_done が True にならなかった場合
+                # (基本的には起こらないはずだが念のため)
+                if not final_chunk_processed:
                     logger.warning(
-                        "Stream ended without explicit done flag, sending empty token usage"
+                        "Stream ended unexpectedly without a final 'done: true' chunk."
                     )
-                    yield ("", True, token_usage)
+                    # 完了と見なして空のチャンクと空のusageを返す
+                    yield ("", True, {})
 
     async def text_generation(self, prompt: str, model_name: str) -> str:
         """Ollamaのテキスト生成エンドポイントを呼び出す"""
