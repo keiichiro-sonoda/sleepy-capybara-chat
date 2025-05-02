@@ -1,20 +1,19 @@
+"use client";
+
 import { useState, FormEvent } from 'react';
-import { AVAILABLE_MODELS } from '@/utils/constants';
 
 type ChatInputProps = {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   disabled: boolean;
   isStreaming?: boolean;
-  currentModel?: string;
 };
 
 const ChatInput = ({
   onSendMessage,
   isLoading,
   disabled,
-  isStreaming = true,
-  currentModel = 'llama3'
+  isStreaming = true
 }: ChatInputProps) => {
   const [message, setMessage] = useState('');
 

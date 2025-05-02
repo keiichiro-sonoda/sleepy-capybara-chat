@@ -1,5 +1,8 @@
-import { useRef, useEffect } from 'react';
-import { AVAILABLE_MODELS } from '@/utils/constants';
+"use client";
+
+import { useRef, useEffect, useState } from 'react';
+import { AIModel } from '@/utils/constants';
+import { getAvailableModels } from '@/utils/api';
 
 type Message = {
   id: string;
@@ -20,11 +23,25 @@ type ChatMessagesProps = {
 
 const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = false }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [models, setModels] = useState<AIModel[]>([]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const availableModels = await getAvailableModels();
+        setModels(availableModels);
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      }
+    };
+
+    fetchModels();
+  }, []);
 
   // モデル名から表示用の名前を取得
   const getModelDisplayName = (modelId?: string): string => {
     if (!modelId) return 'Unknown';
-    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+    const model = models.find(m => m.id === modelId);
     return model ? model.name : modelId;
   };
 

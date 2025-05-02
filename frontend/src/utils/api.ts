@@ -1,5 +1,6 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import { User } from '@/hooks/useAuth';
+import { AIModel } from './constants';
 
 // APIのベースURL
 export const getApiUrl = (): string => {
@@ -124,10 +125,27 @@ export type ChatMessage = {
   model_name?: string;
 };
 
+// 利用可能なAIモデル一覧を取得
+export const getAvailableModels = async (): Promise<AIModel[]> => {
+  const response = await axios.get<AIModel[]>(`${getApiUrl()}/v1/models`);
+  return response.data;
+};
+
+// デフォルトモデルを取得
+export const getDefaultModel = async (): Promise<string> => {
+  const response = await axios.get<string>(`${getApiUrl()}/v1/models/default`);
+  return response.data;
+};
+
+// APIからモデル情報を取得する前の一時的なデフォルトモデル
+// これはAPIリクエスト中のフォールバックとしてのみ使用
+const TEMP_DEFAULT_MODEL = "qwen3";
+
 // 新しいチャットセッションを作成
-export const createChatSession = async (modelName: string = 'llama3'): Promise<ChatSession> => {
+export const createChatSession = async (modelName?: string): Promise<ChatSession> => {
+  const modelToUse = modelName || TEMP_DEFAULT_MODEL;
   return await authPost<ChatSession>('/v1/chat/sessions', {
-    model_name: modelName
+    model_name: modelToUse
   });
 };
 

@@ -11,6 +11,7 @@ import {
   getChatSessions,
   getChatMessages,
   deleteChatSession,
+  getDefaultModel,
   ChatSession
 } from '@/utils/api';
 
@@ -39,7 +40,29 @@ function ChatContent() {
   const [error, setError] = useState<string | null>(null);
   const [isNewChat, setIsNewChat] = useState(true); // 新規チャットモードかどうか
   const [useStreaming, setUseStreaming] = useState(true); // ストリーミングモードを使用するかどうか
-  const [selectedModel, setSelectedModel] = useState("llama3");
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [loadingModel, setLoadingModel] = useState(true);
+
+  // デフォルトモデルとセッション一覧を初期化時に取得
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        setLoadingModel(true);
+        const defaultModel = await getDefaultModel();
+        setSelectedModel(defaultModel);
+      } catch (err) {
+        console.error('Failed to fetch default model:', err);
+        // フォールバックとして一時的なデフォルトモデルを使用
+        setSelectedModel("qwen3");
+      } finally {
+        setLoadingModel(false);
+      }
+
+      fetchSessions();
+    };
+
+    initApp();
+  }, []);
 
   // セッション一覧を取得
   const fetchSessions = async () => {
@@ -55,11 +78,6 @@ function ChatContent() {
     }
   };
 
-  // 初期化時にチャットセッション一覧を取得
-  useEffect(() => {
-    fetchSessions();
-  }, []);
-
   // 新しいチャットの準備をする（セッションはまだ作成しない）
   const prepareNewChat = () => {
     setMessages([]);
@@ -72,7 +90,7 @@ function ChatContent() {
   const createNewSession = async (modelName?: string): Promise<ChatSession> => {
     try {
       setIsLoading(true);
-      const newSession = await createChatSession(modelName || "llama3");
+      const newSession = await createChatSession(modelName);
       setCurrentSession(newSession);
 
       // セッション一覧を更新
@@ -151,6 +169,8 @@ function ChatContent() {
 
   // メッセージ送信処理
   const handleSendMessage = async (message: string) => {
+    if (loadingModel) return; // モデルロード中は送信できないようにする
+
     setIsLoading(true);
     setError(null);
     try {
@@ -301,6 +321,7 @@ function ChatContent() {
         useStreaming={useStreaming}
         onToggleStreaming={toggleStreamingMode}
         onModelChange={handleModelChange}
+        isLoading={loadingModel}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -318,7 +339,7 @@ function ChatContent() {
         <div className="flex flex-col flex-1 overflow-hidden">
           <ChatMessages
             messages={messages}
-            isLoading={isLoading}
+            isLoading={isLoading || loadingModel}
             error={error}
             sessionName={currentSession?.model_name}
             isNewChat={isNewChat}
@@ -326,10 +347,9 @@ function ChatContent() {
 
           <ChatInput
             onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-            disabled={!currentSession && messages.length > 0}
+            isLoading={isLoading || loadingModel}
+            disabled={(!currentSession && messages.length > 0) || loadingModel}
             isStreaming={useStreaming}
-            currentModel={selectedModel}
           />
         </div>
       </div>

@@ -1,6 +1,10 @@
+"use client";
+
 import { useAuth } from '@/hooks/useAuth';
-import { AVAILABLE_MODELS, AIModel } from '@/utils/constants';
+import { AIModel } from '@/utils/constants';
+import { getAvailableModels } from '@/utils/api';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 type ChatHeaderProps = {
   user: ReturnType<typeof useAuth>['user'];
@@ -10,6 +14,7 @@ type ChatHeaderProps = {
   useStreaming: boolean;
   onToggleStreaming: () => void;
   onModelChange?: (model: string) => void;
+  isLoading?: boolean;
 };
 
 const ChatHeader = ({
@@ -19,9 +24,30 @@ const ChatHeader = ({
   currentModel,
   useStreaming,
   onToggleStreaming,
-  onModelChange
+  onModelChange,
+  isLoading: externalLoading
 }: ChatHeaderProps) => {
   const router = useRouter();
+  const [models, setModels] = useState<AIModel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const availableModels = await getAvailableModels();
+        setModels(availableModels);
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchModels();
+  }, []);
+
+  // 内部ローディング状態または外部から渡されたローディング状態を使用
+  const isModelLoading = isLoading || externalLoading;
 
   return (
     <header className="bg-gray-800 text-white p-4 shadow-md">
@@ -39,15 +65,19 @@ const ChatHeader = ({
           <div className="ml-4">
             <select
               className="bg-gray-700 text-white rounded-md px-3 py-1 text-sm"
-              value={currentModel || AVAILABLE_MODELS[0].id}
+              value={currentModel || (models.length > 0 ? models[0].id : '')}
               onChange={e => onModelChange && onModelChange(e.target.value)}
-              disabled={!onModelChange}
+              disabled={!onModelChange || isModelLoading || models.length === 0}
             >
-              {AVAILABLE_MODELS.map((model: AIModel) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
+              {isModelLoading ? (
+                <option>読み込み中...</option>
+              ) : (
+                models.map((model: AIModel) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
