@@ -2,14 +2,32 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+# 利用可能なモデルのリスト
+AVAILABLE_MODELS = [
+    # {"id": "llama3", "name": "Llama 3", "provider": "ollama"},
+    {"id": "qwen3:8b", "name": "Qwen3 8B", "provider": "ollama"},
+    {"id": "gpt-4.1-nano", "name": "GPT-4.1 Nano", "provider": "openai"},
+]
+
+# デフォルトモデルを最初のモデルに設定
+DEFAULT_MODEL = AVAILABLE_MODELS[0]["id"] if AVAILABLE_MODELS else "qwen3"
+
+
 class MessageBase(BaseModel):
     content: str
     role: str
 
 
+# AIモデルの定義用クラス
+class AIModel(BaseModel):
+    id: str
+    name: str
+    provider: str
+
+
 class MessageCreate(MessageBase):
     stream: bool = False
-    model_name: str = "llama3"  # デフォルトでllama3を使用
+    model_name: str = DEFAULT_MODEL
 
 
 class Message(MessageBase):
@@ -42,10 +60,3 @@ class ChatSession(ChatSessionBase):
 class ChatResponse(BaseModel):
     response: str
     session_id: int
-
-
-# 利用可能なモデルのリスト (フロントエンド側で使用)
-AVAILABLE_MODELS = [
-    {"id": "llama3", "name": "Llama 3", "provider": "ollama"},
-    {"id": "gpt-4.1-nano", "name": "GPT-4.1 Nano", "provider": "openai"},
-]
