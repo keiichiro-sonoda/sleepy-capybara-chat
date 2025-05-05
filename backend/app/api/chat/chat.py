@@ -23,6 +23,7 @@ from app.services.token_usage import TokenUsageService
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 router = APIRouter()
 settings = get_settings()
@@ -83,6 +84,11 @@ async def create_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatResponse | StreamingResponse:
+    # thinking_modeパラメータをログ出力（レベルをINFOに上げる）
+    logger.info(
+        f"💬 Message request received: model={message.model_name}, thinking_mode={message.thinking_mode}, content_preview='{message.content[:30]}...'"
+    )
+
     # セッションの存在確認
     chat_session = (
         db.query(ChatSession)
@@ -94,21 +100,18 @@ async def create_message(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
         )
 
-    # トークン制限チェック
-    is_allowed, limit_message = await TokenUsageService.check_token_limit(
-        db, current_user.id, message.model_name
+    # ChatServiceから思考モードのサポート状況を確認
+    thinking_mode_support = ChatService.get_thinking_mode_support(message.model_name)
+    logger.info(
+        f"🧠 Model {message.model_name} thinking mode support: {thinking_mode_support}"
     )
-    if not is_allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=limit_message,
-        )
 
     # ユーザーメッセージの保存（モデル名を含める）
+    user_content = message.content
     user_message = Message(
         session_id=session_id,
         role="user",
-        content=message.content,
+        content=user_content,
         model_name=message.model_name,
     )
     db.add(user_message)
@@ -119,7 +122,7 @@ async def create_message(
     message_count = db.query(Message).filter(Message.session_id == session_id).count()
     if message_count == 1:
         session_name = await ChatService.generate_session_name_from_message(
-            message.content
+            user_content
         )
         chat_session.name = session_name
         db.commit()
@@ -140,7 +143,12 @@ async def create_message(
     if message.stream:
         return StreamingResponse(
             _stream_chat_response(
-                session_id, formatted_messages, message.model_name, db, current_user.id
+                session_id,
+                formatted_messages,
+                message.model_name,
+                db,
+                current_user.id,
+                message.thinking_mode,
             ),
             media_type="text/event-stream",
         )
@@ -148,9 +156,13 @@ async def create_message(
     # 非ストリーミングモードの場合
     try:
         response_data = await ChatService.get_chat_response(
-            formatted_messages, message.model_name, stream=False
+            formatted_messages,
+            message.model_name,
+            stream=False,
+            thinking_mode=message.thinking_mode,
         )
         ai_response = response_data["content"]
+        thinking_content = response_data.get("thinking_content")
 
         # トークン使用量のログ出力を追加
         if "token_usage" in response_data:
@@ -174,11 +186,19 @@ async def create_message(
             )
 
         # AIのレスポンスを保存
+        logger.info(
+            f"💾 Saving non-streaming response to DB: content_length={len(ai_response)}, thinking_length={len(thinking_content) if thinking_content else 0}"
+        )
+        logger.debug(f"💾 Content preview: {ai_response[:100]}...")
+        logger.debug(
+            f"💾 Thinking preview: {thinking_content[:100] if thinking_content else 'None'}..."
+        )
         ai_message = Message(
             session_id=session_id,
             role="assistant",
             content=ai_response,
             model_name=message.model_name,
+            thinking_content=thinking_content,
         )
         db.add(ai_message)
         db.commit()
@@ -199,19 +219,21 @@ async def _stream_chat_response(
     model_name: str,
     db: Session,
     user_id: int,
+    thinking_mode: bool = False,
 ) -> typing.AsyncGenerator[str, None]:
     logger.info(
-        f"Starting streaming response for session_id={session_id}, model={model_name}"
+        f"Starting streaming response for session_id={session_id}, model={model_name}, thinking_mode={thinking_mode}"
     )
 
     complete_response = ""
+    thinking_content = None
     token_usage = None
 
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
 
     try:
         chat_response_gen = await ChatService.get_chat_response(
-            messages, model_name, stream=True
+            messages, model_name, stream=True, thinking_mode=thinking_mode
         )
 
         chunk_count = 0
@@ -222,6 +244,12 @@ async def _stream_chat_response(
                 # トークン使用量情報があれば詳細をログに出力
                 if usage and isinstance(usage, dict) and usage:
                     logger.debug(f"Token usage info from chunk {chunk_count}: {usage}")
+                    # 思考部分があれば取得
+                    if "thinking_content" in usage:
+                        thinking_content = usage["thinking_content"]
+                        logger.debug(
+                            f"Thinking content extracted: {len(thinking_content) if thinking_content else 0} chars"
+                        )
             else:
                 # 後方互換性のために2つの値の場合も対応
                 chunk, is_done = chunk_data
@@ -241,7 +269,7 @@ async def _stream_chat_response(
 
             if is_done:
                 logger.info(
-                    f"Saving AI response to DB: session_id={session_id}, content_length={len(complete_response)}, chunks_processed={chunk_count}"
+                    f"Saving AI response to DB: session_id={session_id}, content_length={len(complete_response)}, thinking_content_length={len(thinking_content) if thinking_content else 0}, chunks_processed={chunk_count}"
                 )
 
                 if not complete_response:
@@ -275,15 +303,23 @@ async def _stream_chat_response(
                         f"No token usage information in final streaming chunk from {model_name}"
                     )
 
+                # DB保存直前のログを追加
+                logger.info(
+                    f"💾 Saving streaming response to DB: content_length={len(complete_response)}, thinking_length={len(thinking_content) if thinking_content else 0}"
+                )
+                logger.debug(f"💾 Content preview: {complete_response[:100]}...")
+                logger.debug(
+                    f"💾 Thinking preview: {thinking_content[:100] if thinking_content else 'None'}..."
+                )
                 ai_message = Message(
                     session_id=session_id,
                     role="assistant",
                     content=complete_response,
                     model_name=model_name,
+                    thinking_content=thinking_content,
                 )
                 db.add(ai_message)
                 db.commit()
-                db.refresh(ai_message)
 
                 logger.info(f"AI response saved to DB: message_id={ai_message.id}")
 
@@ -311,6 +347,7 @@ async def _stream_chat_response(
                         "session_id": session_id,
                         "model_name": model_name,
                         "token_usage": token_usage_dict,
+                        "thinking_content": thinking_content,
                     }
                 ) + "\n\n"
 

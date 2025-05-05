@@ -25,6 +25,7 @@ class Message(Base):
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
+    thinking_content = Column(Text, nullable=True)  # 思考過程を保存するフィールド
     model_name = Column(String, nullable=False)  # 使用されたモデル名（必須）
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

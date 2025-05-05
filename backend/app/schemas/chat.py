@@ -5,8 +5,18 @@ from pydantic import BaseModel, ConfigDict
 # 利用可能なモデルのリスト
 AVAILABLE_MODELS = [
     # {"id": "llama3", "name": "Llama 3", "provider": "ollama"},
-    {"id": "qwen3:8b", "name": "Qwen3 8B", "provider": "ollama"},
-    {"id": "gpt-4.1-nano", "name": "GPT-4.1 Nano", "provider": "openai"},
+    {
+        "id": "qwen3:8b",
+        "name": "Qwen3 8B",
+        "provider": "ollama",
+        "thinking_mode": "optional",
+    },
+    {
+        "id": "gpt-4.1-nano",
+        "name": "GPT-4.1 Nano",
+        "provider": "openai",
+        "thinking_mode": "none",
+    },
 ]
 
 # デフォルトモデルを最初のモデルに設定
@@ -16,6 +26,7 @@ DEFAULT_MODEL = AVAILABLE_MODELS[0]["id"] if AVAILABLE_MODELS else "qwen3"
 class MessageBase(BaseModel):
     content: str
     role: str
+    thinking_content: str | None = None  # 思考過程（オプショナル）
 
 
 # AIモデルの定義用クラス
@@ -23,11 +34,13 @@ class AIModel(BaseModel):
     id: str
     name: str
     provider: str
+    thinking_mode: str = "none"  # "none", "optional", "forced"
 
 
 class MessageCreate(MessageBase):
     stream: bool = False
     model_name: str = DEFAULT_MODEL
+    thinking_mode: bool = False  # 思考モードのオン/オフ
 
 
 class Message(MessageBase):

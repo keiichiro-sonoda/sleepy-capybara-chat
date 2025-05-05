@@ -5,6 +5,7 @@ from typing import Any, AsyncGenerator, Tuple
 from app.services.chat.base import ModelProvider
 from app.services.chat.ollama import OllamaProvider
 from app.services.chat.openai import OpenAIProvider
+from app.schemas.chat import AVAILABLE_MODELS
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -72,16 +73,32 @@ class ChatService:
 
     @staticmethod
     async def get_chat_response(
-        messages: list[dict[str, str]], model_name: str, stream: bool = False
+        messages: list[dict[str, str]],
+        model_name: str,
+        stream: bool = False,
+        thinking_mode: bool = False,
     ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
         provider_name, actual_model = ChatService.get_provider_from_model(model_name)
         logger.debug(
-            f"Using provider: {provider_name}, model: {actual_model}, stream: {stream}"
+            f"Using provider: {provider_name}, model: {actual_model}, stream: {stream}, thinking_mode: {thinking_mode}"
         )
 
+        # 思考モードのサポート状況を確認
+        thinking_mode_support = ChatService.get_thinking_mode_support(model_name)
+
+        # モデルが思考モードをサポートしていない場合は無効化
+        if thinking_mode_support == "none":
+            thinking_mode = False
+        # モデルが思考モードを強制する場合は有効化
+        elif thinking_mode_support == "forced":
+            thinking_mode = True
+        # それ以外（"optional"）の場合は、パラメータ指定通りの値を使用
+
         provider = ProviderFactory.get_provider(provider_name)
-        response = await provider.chat_completion(messages, actual_model, stream)
+        response = await provider.chat_completion(
+            messages, actual_model, stream, thinking_mode
+        )
 
         if not stream:
             logger.debug(
@@ -89,3 +106,11 @@ class ChatService:
             )
 
         return response
+
+    @staticmethod
+    def get_thinking_mode_support(model_name: str) -> str:
+        """モデルの思考モードサポート状況を取得"""
+        for model in AVAILABLE_MODELS:
+            if model["id"] == model_name:
+                return model.get("thinking_mode", "none")
+        return "none"  # デフォルトは思考モードなし
