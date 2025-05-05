@@ -73,3 +73,16 @@ class ChatSession(ChatSessionBase):
 class ChatResponse(BaseModel):
     response: str
     session_id: int
+
+
+class ChatResponseWithThinking(ChatResponse):
+    thinking_content: str | None = None
+
+
+# メッセージ履歴表示用
+class MessageSchema(MessageBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True

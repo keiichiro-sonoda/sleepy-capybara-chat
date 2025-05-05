@@ -189,7 +189,7 @@ class OpenAIProvider(ModelProvider):
                 # テキストチャンクの処理
                 if event_type == "ResponseTextDeltaEvent":
                     full_response += chunk.delta
-                    yield (chunk.delta, False, {})
+                    yield (chunk.delta, "answer", False, {})
 
                 # ストリーミング完了イベントの処理
                 elif event_type in ["ResponseTextDoneEvent", "ResponseCompletedEvent"]:
@@ -224,8 +224,8 @@ class OpenAIProvider(ModelProvider):
                 )
 
             # ストリーム終了時にトークン使用量情報と共に完了を通知
-            yield ("", True, usage_data)
+            yield ("", "done", True, usage_data)
 
         except Exception as e:
             logger.error(f"Error in stream processing: {str(e)}", exc_info=True)
-            yield ("", True, {})
+            yield ("", "done", True, {})

@@ -15,8 +15,8 @@ from app.schemas.chat import (
     ChatSessionCreate,
     ChatSession as ChatSessionSchema,
     MessageCreate,
-    Message as MessageSchema,
-    ChatResponse,
+    MessageSchema,
+    ChatResponseWithThinking,
 )
 from app.services.chat import ChatService
 from app.services.token_usage import TokenUsageService
@@ -83,7 +83,7 @@ async def create_message(
     message: MessageCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> ChatResponse | StreamingResponse:
+) -> ChatResponseWithThinking | StreamingResponse:
     # thinking_modeパラメータをログ出力（レベルをINFOに上げる）
     logger.info(
         f"💬 Message request received: model={message.model_name}, thinking_mode={message.thinking_mode}, content_preview='{message.content[:30]}...'"
@@ -203,7 +203,11 @@ async def create_message(
         db.add(ai_message)
         db.commit()
 
-        return ChatResponse(response=ai_response, session_id=session_id)
+        return ChatResponseWithThinking(
+            response=ai_response,
+            session_id=session_id,
+            thinking_content=thinking_content,
+        )
     except Exception as e:
         logger.error(f"Error getting chat response: {e}")
         raise HTTPException(
@@ -226,7 +230,7 @@ async def _stream_chat_response(
     )
 
     complete_response = ""
-    thinking_content = None
+    complete_thinking = ""
     token_usage = None
 
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
@@ -237,48 +241,35 @@ async def _stream_chat_response(
         )
 
         chunk_count = 0
-        async for chunk_data in chat_response_gen:
-            # 必要な値を抽出（chunk, is_done, usageの3つの値）
-            if len(chunk_data) == 3:
-                chunk, is_done, usage = chunk_data
-                # トークン使用量情報があれば詳細をログに出力
-                if usage and isinstance(usage, dict) and usage:
-                    logger.debug(f"Token usage info from chunk {chunk_count}: {usage}")
-                    # 思考部分があれば取得
-                    if "thinking_content" in usage:
-                        thinking_content = usage["thinking_content"]
-                        logger.debug(
-                            f"Thinking content extracted: {len(thinking_content) if thinking_content else 0} chars"
-                        )
-            else:
-                # 後方互換性のために2つの値の場合も対応
-                chunk, is_done = chunk_data
-                usage = {}
-                logger.debug(f"No usage info in chunk {chunk_count}")
-
+        async for chunk, chunk_type, is_done, usage in chat_response_gen:
             chunk_count += 1
             logger.debug(
-                f"Chunk #{chunk_count} received: length={len(chunk) if chunk else 0}, is_done={is_done}"
+                f"Chunk #{chunk_count} received: type={chunk_type}, length={len(chunk)}, is_done={is_done}"
             )
 
-            if chunk:
-                complete_response += chunk
-                yield "data: " + json.dumps(
-                    {"event": "chunk", "content": chunk}
-                ) + "\n\n"
-
-            if is_done:
-                logger.info(
-                    f"Saving AI response to DB: session_id={session_id}, content_length={len(complete_response)}, thinking_content_length={len(thinking_content) if thinking_content else 0}, chunks_processed={chunk_count}"
-                )
-
-                if not complete_response:
-                    logger.warning(
-                        f"Empty response detected for session_id={session_id}"
+            if usage and isinstance(usage, dict) and "thinking_content" in usage:
+                if usage["thinking_content"] is not None:
+                    complete_thinking = usage["thinking_content"]
+                    logger.debug(
+                        f"Updated complete_thinking from usage: {len(complete_thinking)} chars"
                     )
-                    complete_response = "応答を生成できませんでした。"
+                else:
+                    logger.debug("Received None for thinking_content in usage.")
 
-                # トークン使用量を記録
+            if chunk_type == "thinking":
+                yield "data: " + json.dumps(
+                    {"event": "chunk", "type": "thinking", "content": chunk}
+                ) + "\n\n"
+            elif chunk_type == "answer":
+                if chunk:
+                    complete_response += chunk
+                    yield "data: " + json.dumps(
+                        {"event": "chunk", "type": "answer", "content": chunk}
+                    ) + "\n\n"
+            elif chunk_type == "done":
+                logger.info(
+                    f"Processing 'done' event from provider. Final accumulated response length: {len(complete_response)}, thinking length: {len(complete_thinking)}"
+                )
                 if usage:
                     prompt_tokens = usage.get("prompt_tokens", 0)
                     completion_tokens = usage.get("completion_tokens", 0)
@@ -298,34 +289,6 @@ async def _stream_chat_response(
                         prompt_tokens,
                         completion_tokens,
                     )
-                else:
-                    logger.warning(
-                        f"No token usage information in final streaming chunk from {model_name}"
-                    )
-
-                # DB保存直前のログを追加
-                logger.info(
-                    f"💾 Saving streaming response to DB: content_length={len(complete_response)}, thinking_length={len(thinking_content) if thinking_content else 0}"
-                )
-                logger.debug(f"💾 Content preview: {complete_response[:100]}...")
-                logger.debug(
-                    f"💾 Thinking preview: {thinking_content[:100] if thinking_content else 'None'}..."
-                )
-                ai_message = Message(
-                    session_id=session_id,
-                    role="assistant",
-                    content=complete_response,
-                    model_name=model_name,
-                    thinking_content=thinking_content,
-                )
-                db.add(ai_message)
-                db.commit()
-
-                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
-
-                # SQLAlchemyオブジェクトを辞書に変換
-                token_usage_dict = None
-                if token_usage:
                     token_usage_dict = {
                         "id": token_usage.id,
                         "user_id": token_usage.user_id,
@@ -339,71 +302,59 @@ async def _stream_chat_response(
                             else None
                         ),
                     }
+                else:
+                    logger.warning(
+                        f"No token usage information in final streaming chunk from {model_name}"
+                    )
+                    token_usage_dict = None
+
+                final_answer_content_to_save = complete_response.strip()
+                final_thinking_content_to_save = (
+                    complete_thinking.strip() if thinking_mode else None
+                )
+
+                logger.info(
+                    f"💾 Saving streaming response to DB: content_length={len(final_answer_content_to_save)}, thinking_length={len(final_thinking_content_to_save) if final_thinking_content_to_save else 0}"
+                )
+                logger.debug(
+                    f"💾 Content preview: {final_answer_content_to_save[:100]}..."
+                )
+                logger.debug(
+                    f"💾 Thinking preview: {final_thinking_content_to_save[:100] if final_thinking_content_to_save else 'None'}..."
+                )
+
+                if not final_answer_content_to_save:
+                    logger.warning(
+                        f"Empty final answer detected for session_id={session_id}, model={model_name}"
+                    )
+                    final_answer_content_to_save = "(応答なし)"
+
+                ai_message = Message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=final_answer_content_to_save,
+                    model_name=model_name,
+                    thinking_content=final_thinking_content_to_save,
+                )
+                db.add(ai_message)
+                db.commit()
+                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
 
                 yield "data: " + json.dumps(
                     {
                         "event": "done",
-                        "content": complete_response,
+                        "content": final_answer_content_to_save,
                         "session_id": session_id,
                         "model_name": model_name,
                         "token_usage": token_usage_dict,
-                        "thinking_content": thinking_content,
+                        "thinking_content": final_thinking_content_to_save,
                     }
                 ) + "\n\n"
 
                 logger.info(f"Streaming response completed for session_id={session_id}")
                 break
-
-            await asyncio.sleep(0.01)
-
-        if not is_done:
-            logger.warning(
-                f"Stream completed without is_done signal for session_id={session_id}"
-            )
-
-            if complete_response:
-                logger.info(
-                    f"Saving AI response anyway: session_id={session_id}, content_length={len(complete_response)}"
-                )
-
-                ai_message = Message(
-                    session_id=session_id,
-                    role="assistant",
-                    content=complete_response,
-                    model_name=model_name,
-                )
-                db.add(ai_message)
-                db.commit()
-                db.refresh(ai_message)
-
-                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
-
-                # SQLAlchemyオブジェクトを辞書に変換
-                token_usage_dict = None
-                if token_usage:
-                    token_usage_dict = {
-                        "id": token_usage.id,
-                        "user_id": token_usage.user_id,
-                        "model_name": token_usage.model_name,
-                        "prompt_tokens": token_usage.prompt_tokens,
-                        "completion_tokens": token_usage.completion_tokens,
-                        "total_tokens": token_usage.total_tokens,
-                        "timestamp": (
-                            str(token_usage.timestamp)
-                            if token_usage.timestamp
-                            else None
-                        ),
-                    }
-
-                yield "data: " + json.dumps(
-                    {
-                        "event": "done",
-                        "content": complete_response,
-                        "session_id": session_id,
-                        "model_name": model_name,
-                        "token_usage": token_usage_dict,
-                    }
-                ) + "\n\n"
+            else:
+                logger.warning(f"Unknown chunk type received: {chunk_type}")
 
     except Exception as e:
         logger.error(f"Error in streaming response: {e}", exc_info=True)

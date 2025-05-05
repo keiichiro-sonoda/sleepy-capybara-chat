@@ -96,9 +96,18 @@ class ChatService:
         # それ以外（"optional"）の場合は、パラメータ指定通りの値を使用
 
         provider = ProviderFactory.get_provider(provider_name)
-        response = await provider.chat_completion(
-            messages, actual_model, stream, thinking_mode
-        )
+
+        # プロバイダーのchat_completionを呼び出す
+        if thinking_mode_support == "none":
+            # 思考モードをサポートしないモデルの場合、thinking_mode引数を渡さない
+            response = await provider.chat_completion(
+                messages, actual_model, stream=stream
+            )
+        else:
+            # 思考モードをサポートするモデルの場合、thinking_mode引数を渡す
+            response = await provider.chat_completion(
+                messages, actual_model, stream=stream, thinking_mode=thinking_mode
+            )
 
         if not stream:
             logger.debug(

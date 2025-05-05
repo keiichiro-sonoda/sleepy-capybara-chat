@@ -160,12 +160,13 @@ class OllamaProvider(ModelProvider):
 
     async def _stream_chat_response(
         self, request_data: dict, thinking_mode: bool = False
-    ) -> AsyncGenerator[tuple[str, bool, dict], None]:
-        """Ollamaストリーミングレスポンスをジェネレータとして処理"""
+    ) -> AsyncGenerator[tuple[str, str, bool, dict], None]:
+        """Ollamaストリーミングレスポンスをジェネレータとして処理 (チャンクタイプ付き)"""
         complete_response = ""
         complete_thinking = ""
         in_thinking_block = False
-        # 初期値は空の辞書にしておく
+        is_first_chunk = True
+        ignore_next_newline_chunk = False
         token_usage = {}
 
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -179,7 +180,7 @@ class OllamaProvider(ModelProvider):
                     )
                     raise Exception(f"Error from Ollama API: {response.status_code}")
 
-                final_chunk_processed = False  # 最終チャンク処理済みフラグ
+                final_chunk_processed = False
                 async for line in response.aiter_lines():
                     if not line:
                         continue
@@ -191,145 +192,131 @@ class OllamaProvider(ModelProvider):
                         current_usage = {}  # このチャンクで返すusage
 
                         if chunk:
-                            # デバッグ用：チャンクの内容をログ出力
-                            preview_chunk = chunk[:50] + (
+                            preview_chunk = chunk.replace("\n", "\\n")[:50] + (
                                 "..." if len(chunk) > 50 else ""
                             )
-                            logger.debug(f"Received chunk: '{preview_chunk}'")
-                            logger.debug(f"In thinking block: {in_thinking_block}")
+                            logger.debug(
+                                f"Received chunk: '{preview_chunk}', In thinking: {in_thinking_block}, IgnoreNextNL: {ignore_next_newline_chunk}"
+                            )
 
-                            # 思考モードが有効な場合、チャンクを思考部分と回答部分に分割
-                            if thinking_mode:
-                                # <think>タグの開始を検出
-                                if "<think>" in chunk and not in_thinking_block:
-                                    in_thinking_block = True
+                            # --- 統合された改行無視 & 思考ブロック検出 ---
+                            processed_chunk_for_yield = None
+                            processed_for_yield_type = None
+
+                            # 1. タグ直後の改行チャンク無視処理
+                            if ignore_next_newline_chunk:
+                                if chunk.strip() == "":
                                     logger.debug(
-                                        "Detected <think> tag, entering thinking block"
+                                        "Ignoring newline-only chunk after tag."
                                     )
-                                    chunk_parts = chunk.split("<think>", 1)
-                                    if chunk_parts[
-                                        0
-                                    ]:  # <think>の前に通常のテキストがある場合
-                                        complete_response += chunk_parts[0]
-                                        logger.debug(
-                                            f"Added text before <think>: '{chunk_parts[0]}'"
-                                        )
-                                    if len(chunk_parts) > 1:
-                                        complete_thinking += chunk_parts[1]
-                                        logger.debug(
-                                            f"Added to thinking: '{chunk_parts[1]}'"
-                                        )
-                                # </think>タグの終了を検出 - 単独行での終了を想定
-                                elif "\n</think>" in chunk and in_thinking_block:
-                                    in_thinking_block = False
-                                    logger.debug(
-                                        "Detected \\n</think> tag, exiting thinking block"
-                                    )
-                                    chunk_parts = chunk.split("\n</think>", 1)
-                                    if chunk_parts[0]:  # </think>の前の思考部分
-                                        complete_thinking += chunk_parts[0]
-                                        logger.debug(
-                                            f"Added final thinking content: '{chunk_parts[0]}'"
-                                        )
-                                    if len(chunk_parts) > 1:
-                                        complete_response += chunk_parts[1]
-                                        logger.debug(
-                                            f"Added response after thinking: '{chunk_parts[1]}'"
-                                        )
-                                # 行の途中での</think>タグの処理も追加
-                                elif "</think>" in chunk and in_thinking_block:
-                                    in_thinking_block = False
-                                    logger.debug(
-                                        "Detected </think> tag (inline), exiting thinking block"
-                                    )
-                                    chunk_parts = chunk.split("</think>", 1)
-                                    if chunk_parts[0]:  # </think>の前の思考部分
-                                        complete_thinking += chunk_parts[0]
-                                        logger.debug(
-                                            f"Added final thinking content (inline): '{chunk_parts[0]}'"
-                                        )
-                                    if len(chunk_parts) > 1:
-                                        complete_response += chunk_parts[1]
-                                        logger.debug(
-                                            f"Added response after thinking (inline): '{chunk_parts[1]}'"
-                                        )
-                                # 思考ブロック内の通常テキスト
-                                elif in_thinking_block:
-                                    complete_thinking += chunk
-                                    logger.debug(
-                                        f"Added to thinking block: '{preview_chunk}'"
-                                    )
-                                # 思考ブロック外の通常テキスト
+                                    ignore_next_newline_chunk = False
+                                    continue
                                 else:
-                                    complete_response += chunk
-                                    logger.debug(
-                                        f"Added to response: '{preview_chunk}'"
+                                    logger.warning(
+                                        "Expected newline-only chunk after tag, but got something else. Resetting ignore flag."
                                     )
-                            else:
-                                complete_response += chunk
+                                    ignore_next_newline_chunk = False
+                                    # このチャンクはステップ2以降で通常処理
 
-                            # 中間チャンクではコンテンツのみを返す
-                            yield (chunk, False, {})
+                            # 2. 最初のチャンク処理 (思考開始判定)
+                            if is_first_chunk:
+                                logger.debug("Processing first chunk...")
+                                if chunk == "<think>":
+                                    in_thinking_block = True
+                                    ignore_next_newline_chunk = True
+                                    logger.debug(
+                                        "Detected <think>, entering thinking block."
+                                    )
+                                    # <think> 自体は保存もyieldもしない
+                                else:
+                                    in_thinking_block = False
+                                    logger.debug(
+                                        "First chunk is not <think>, treating as response."
+                                    )
+                                    complete_response += chunk
+                                    processed_chunk_for_yield = chunk
+                                    processed_for_yield_type = "answer"
+                                is_first_chunk = False
+
+                            # 3. 思考ブロック中の処理 (思考終了判定含む)
+                            elif in_thinking_block:
+                                logger.debug("Currently in thinking block.")
+                                if chunk == "</think>":
+                                    in_thinking_block = False
+                                    ignore_next_newline_chunk = True
+                                    logger.debug(
+                                        "Detected </think>, exiting thinking block."
+                                    )
+                                    # </think> 自体は保存もyieldもしない
+                                else:
+                                    complete_thinking += chunk
+                                    processed_chunk_for_yield = chunk
+                                    processed_for_yield_type = "thinking"
+
+                            # 4. 通常の回答処理 (思考ブロック外)
+                            else:  # not in_thinking_block and not is_first_chunk and not ignore_next_newline_chunk
+                                logger.debug("Processing regular response chunk.")
+                                complete_response += chunk
+                                processed_chunk_for_yield = chunk
+                                processed_for_yield_type = "answer"
+
+                            # 5. クライアントに yield するチャンクがあれば送信
+                            if processed_chunk_for_yield is not None:
+                                chunk_type_for_yield = (
+                                    processed_for_yield_type or "answer"
+                                )
+                                logger.debug(
+                                    f"Yielding chunk: '{processed_chunk_for_yield.replace('\n','\\n')[:50]}' as {chunk_type_for_yield}"
+                                )
+                                yield (
+                                    processed_chunk_for_yield,
+                                    chunk_type_for_yield,
+                                    False,
+                                    {},
+                                )
+                            # --- 統合された改行無視 & 思考ブロック検出 ここまで ---
 
                         if is_done:
-                            # 最終チャンクからトークン数を取得
+                            logger.debug("Processing final (is_done=True) chunk.")
                             prompt_eval_count = data.get("prompt_eval_count", 0)
                             eval_count = data.get("eval_count", 0)
                             total_tokens = prompt_eval_count + eval_count
 
-                            token_usage = {  # 確定したトークン数を格納
+                            token_usage = {
                                 "prompt_tokens": prompt_eval_count,
                                 "completion_tokens": eval_count,
                                 "total_tokens": total_tokens,
                             }
-                            current_usage = token_usage  # この最終チャンクで返すusage
+                            current_usage = token_usage
 
                             logger.info(
                                 f"Ollama streaming final token counts - prompt_eval_count: {prompt_eval_count}, "
                                 f"eval_count: {eval_count}, total: {total_tokens}"
                             )
                             logger.debug(f"Final streaming chunk data: {data}")
+
+                            # 最終的に返す内容を決定 (前後の空白・改行を除去)
+                            final_thinking_content_to_return = (
+                                complete_thinking.strip() if thinking_mode else None
+                            )
+                            final_answer_content_to_return = complete_response.strip()
+
                             logger.debug(
-                                f"Complete response accumulated: '{complete_response[:100]}...'"
+                                f"Complete response accumulated (stripped): '{final_answer_content_to_return.replace('\n','\\n')[:100]}...'"
                             )
                             logger.debug(
-                                f"Complete thinking accumulated: '{complete_thinking[:100] if complete_thinking else 'None'}...'"
+                                f"Complete thinking accumulated (stripped): '{final_thinking_content_to_return.replace('\n','\\n')[:100] if final_thinking_content_to_return else 'None'}...'"
                             )
 
-                            # レスポンス全体から思考部分と回答部分を分離
-                            final_thinking, final_answer = (
-                                self._extract_thinking_and_answer(complete_response)
+                            current_usage["thinking_content"] = (
+                                final_thinking_content_to_return
                             )
+                            final_chunk_to_yield = ""
 
-                            # 思考モードが有効の場合のみ思考内容を設定
-                            if thinking_mode and final_thinking:
-                                complete_thinking = final_thinking
-                                logger.debug(
-                                    f"Set final thinking content from extraction: '{complete_thinking[:100] if complete_thinking else 'None'}...'"
-                                )
-                            elif thinking_mode and complete_thinking:
-                                logger.debug(
-                                    f"Using accumulated thinking content: '{complete_thinking[:100]}...'"
-                                )
-                            else:
-                                complete_thinking = None
-                                logger.debug("No thinking content available")
-
-                            # 思考モードが有効でかつ思考内容があれば、それを除いた部分を回答とする
-                            if thinking_mode and final_thinking:
-                                complete_response = final_answer
-                                logger.debug(
-                                    f"Set final response content from extraction: '{complete_response[:100]}...'"
-                                )
-
-                            # 思考部分と回答部分を辞書に格納
-                            current_usage["thinking_content"] = complete_thinking
-
-                            # 最終チャンクを処理したことをマーク
                             final_chunk_processed = True
-                            # 空のチャンクと完了フラグ、トークン使用量を返す
-                            yield ("", True, current_usage)
-                            break  # is_doneが来たらループを抜ける
+                            # yield する型を変更 (chunk='', type='done' とする)
+                            yield (final_chunk_to_yield, "done", True, current_usage)
+                            break
 
                         await asyncio.sleep(0.01)
 
@@ -351,7 +338,7 @@ class OllamaProvider(ModelProvider):
                         current_usage = {"thinking_content": complete_thinking}
 
                     # 完了と見なして空のチャンクと空のusageを返す
-                    yield ("", True, current_usage)
+                    yield ("", "done", True, current_usage)
 
     async def text_generation(self, prompt: str, model_name: str) -> str:
         """Ollamaのテキスト生成エンドポイントを呼び出す"""
