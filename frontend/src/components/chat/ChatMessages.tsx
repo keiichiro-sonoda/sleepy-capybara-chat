@@ -11,6 +11,8 @@ type Message = {
   timestamp: Date;
   isStreaming?: boolean;
   modelName?: string;
+  streamingThinkingContent?: string;
+  thinkingContent?: string | null;
 };
 
 type ChatMessagesProps = {
@@ -19,10 +21,12 @@ type ChatMessagesProps = {
   error: string | null;
   sessionName?: string;
   isNewChat?: boolean;
+  isThinkingDetailsOpenForStreamingMessage?: boolean;
 };
 
-const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = false }: ChatMessagesProps) => {
+const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = false, isThinkingDetailsOpenForStreamingMessage }: ChatMessagesProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const thinkingContentRef = useRef<HTMLDivElement>(null);
   const [models, setModels] = useState<AIModel[]>([]);
 
   useEffect(() => {
@@ -50,16 +54,19 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 思考内容が更新されたら思考内容の一番下にスクロール
+  useEffect(() => {
+    if (isThinkingDetailsOpenForStreamingMessage) {
+      thinkingContentRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.map(m => m.streamingThinkingContent).join(''), isThinkingDetailsOpenForStreamingMessage]);
+
   // メッセージの状態に応じたステータスメッセージを返す
   const getStatusMessage = (message: Message): string => {
     if (!message.isStreaming) return '';
-
-    // コンテンツが空の場合は生成開始前
-    if (!message.content || message.content === '') {
+    if (!message.content && !message.streamingThinkingContent) {
       return '応答を準備中...';
     }
-
-    // コンテンツがある場合は生成中
     return '回答生成中...';
   };
 
@@ -93,35 +100,79 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
             )}
           </div>
         ) : (
-          messages.map(message => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          messages.map(message => {
+            // Determine streaming and final thinking states
+            const isStreamingAIMessage = message.role === 'assistant' && message.isStreaming;
+            const streamingThinking = message.streamingThinkingContent;
+            const finalThinking = !message.isStreaming ? message.thinkingContent : null;
+            // Determine if streaming thinking in progress
+            const isActivelyStreamingThinking = isStreamingAIMessage && Boolean(streamingThinking);
+            // Determine if final thinking exists
+            const showFinalThinking = !message.isStreaming && Boolean(finalThinking);
+            // Always show answer content after streaming thinking or final thinking
+            const showAnswerContent = Boolean(message.content);
+
+            return (
               <div
-                className={`max-w-[80%] rounded-lg p-4 ${message.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-200 text-gray-800 rounded-bl-none'
-                  }`}
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {message.role === 'assistant' && message.modelName && !message.isStreaming && (
-                  <div className="text-xs font-medium mb-2 text-gray-600 bg-gray-100 px-2 py-1 rounded inline-block">
-                    {getModelDisplayName(message.modelName)}
-                  </div>
-                )}
-                <p className="whitespace-pre-wrap">
-                  {message.content}
-                  {message.isStreaming && (
-                    <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse" />
+                <div
+                  className={`max-w-[80%] rounded-lg ${message.role === 'user'
+                    ? 'bg-blue-600 text-white rounded-br-none'
+                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                    } p-4`}
+                >
+                  {message.role === 'assistant' && message.modelName && !message.isStreaming && (
+                    <div className="text-xs font-medium mb-1 text-gray-600 bg-gray-100 px-2 py-0.5 rounded inline-block">
+                      {getModelDisplayName(message.modelName)}
+                    </div>
                   )}
-                </p>
-                <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
-                  {message.timestamp.toLocaleTimeString()}
-                  {message.isStreaming ? ` (${getStatusMessage(message)})` : ''}
+
+                  {/* ストリーム中の思考表示 */}
+                  {isActivelyStreamingThinking && (
+                    <div className="mb-4 bg-yellow-50 border border-yellow-400 p-3 rounded text-sm text-yellow-900">
+                      <div className="flex items-center mb-2">
+                        <svg className="animate-spin h-4 w-4 mr-2 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="font-medium">AIが思考中...</span>
+                      </div>
+                      <pre className="whitespace-pre-wrap bg-yellow-100 p-2 rounded max-h-40 overflow-auto text-xs">
+                        {streamingThinking}
+                      </pre>
+                    </div>
+                  )}
+                  {/* 完了後の思考表示 */}
+                  {showFinalThinking && (
+                    <details className="mb-2 cursor-pointer group">
+                      <summary className="text-xs text-gray-500 hover:text-gray-700 list-none outline-none">
+                        <span className="font-medium">思考過程を表示...</span>
+                      </summary>
+                      <div className="mt-1 p-2 border-l-2 border-gray-300 bg-gray-100 rounded-r text-xs text-gray-600 whitespace-pre-wrap">
+                        {finalThinking}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* 回答内容 */}
+                  {showAnswerContent && (
+                    <p className="whitespace-pre-wrap">
+                      {message.content}
+                      {message.isStreaming && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse" />
+                      )}
+                    </p>
+                  )}
+                  <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {message.timestamp.toLocaleTimeString()}
+                    {message.isStreaming && ` (${getStatusMessage(message)})`}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

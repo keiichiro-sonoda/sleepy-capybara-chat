@@ -114,6 +114,7 @@ export type ChatSession = {
 export type ChatResponse = {
   response: string;
   session_id: number;
+  thinking_content?: string | null;
 };
 
 export type ChatMessage = {
@@ -123,6 +124,7 @@ export type ChatMessage = {
   content: string;
   created_at: string;
   model_name?: string;
+  thinking_content?: string | null;
 };
 
 // 利用可能なAIモデル一覧を取得
@@ -163,13 +165,15 @@ export const getChatMessages = async (sessionId: number): Promise<ChatMessage[]>
 export const sendChatMessage = async (
   sessionId: number,
   content: string,
-  modelName?: string
+  modelName?: string,
+  thinking_mode?: boolean
 ): Promise<ChatResponse> => {
   return await authPost<ChatResponse>(`/v1/chat/sessions/${sessionId}/messages`, {
     content,
     role: "user",
     stream: false,
-    model_name: modelName // モデル名を指定（省略可能）
+    model_name: modelName,
+    thinking_mode: thinking_mode ?? false
   });
 };
 
@@ -177,10 +181,11 @@ export const sendChatMessage = async (
 export const sendChatMessageStreaming = async (
   sessionId: number,
   content: string,
-  onChunk: (chunk: string) => void,
-  onComplete: (fullResponse: string, modelName?: string) => void,
+  onChunk: (chunk: string, type: 'thinking' | 'answer') => void,
+  onComplete: (fullResponse: string, modelName?: string, thinkingContent?: string | null) => void,
   onError: (error: string) => void,
-  modelName?: string
+  modelName?: string,
+  thinking_mode?: boolean
 ): Promise<void> => {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -199,7 +204,8 @@ export const sendChatMessageStreaming = async (
         content,
         role: "user",
         stream: true,
-        model_name: modelName // モデル名を指定（省略可能）
+        model_name: modelName,
+        thinking_mode: thinking_mode ?? false
       })
     });
 
@@ -207,7 +213,6 @@ export const sendChatMessageStreaming = async (
       throw new Error(`API error: ${response.status}`);
     }
 
-    // EventSourceの代わりにfetchのストリーミングを使用
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('Response body is null');
@@ -215,29 +220,32 @@ export const sendChatMessageStreaming = async (
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let completedResponse = "";
+    let completedThinkingContent: string | null = null;
+    let responseModelName: string | undefined = undefined;
 
-    // ストリームの読み取り
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      // 新しいテキストをバッファに追加
       buffer += decoder.decode(value, { stream: true });
-
-      // バッファを行に分割して処理
       const lines = buffer.split('\n\n');
-      buffer = lines.pop() || ''; // 最後の不完全な行をバッファに戻す
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         if (!line.trim() || !line.startsWith('data: ')) continue;
 
         try {
-          const eventData = JSON.parse(line.substring(6)); // 'data: ' を取り除く
+          const eventData = JSON.parse(line.substring(6));
 
           if (eventData.event === 'chunk' && eventData.content) {
-            onChunk(eventData.content);
+            const chunkType = eventData.type === 'thinking' ? 'thinking' : 'answer';
+            onChunk(eventData.content, chunkType);
           } else if (eventData.event === 'done') {
-            onComplete(eventData.content, eventData.model_name);
+            completedResponse = eventData.content ?? "";
+            completedThinkingContent = eventData.thinking_content ?? null;
+            responseModelName = eventData.model_name ?? modelName;
+            onComplete(completedResponse, responseModelName, completedThinkingContent);
             return;
           } else if (eventData.event === 'error') {
             onError(eventData.message || 'Unknown error');

@@ -12,8 +12,10 @@ import {
   getChatMessages,
   deleteChatSession,
   getDefaultModel,
-  ChatSession
+  ChatSession,
+  getAvailableModels
 } from '@/utils/api';
+import { AIModel } from '@/utils/constants';
 
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatMessages from '@/components/chat/ChatMessages';
@@ -27,6 +29,8 @@ type Message = {
   timestamp: Date;
   isStreaming?: boolean;
   modelName?: string;
+  streamingThinkingContent?: string;
+  thinkingContent?: string | null;
 };
 
 function ChatContent() {
@@ -38,22 +42,41 @@ function ChatContent() {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isNewChat, setIsNewChat] = useState(true); // 新規チャットモードかどうか
-  const [useStreaming, setUseStreaming] = useState(true); // ストリーミングモードを使用するかどうか
+  const [isNewChat, setIsNewChat] = useState(true);
+  const [useStreaming, setUseStreaming] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [loadingModel, setLoadingModel] = useState(true);
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+  const [isThinkingModeEnabled, setIsThinkingModeEnabled] = useState(false);
+  const [isThinkingDetailsOpen, setIsThinkingDetailsOpen] = useState(false);
 
-  // デフォルトモデルとセッション一覧を初期化時に取得
   useEffect(() => {
     const initApp = async () => {
       try {
         setLoadingModel(true);
-        const defaultModel = await getDefaultModel();
+        const [defaultModel, fetchedModels] = await Promise.all([
+          getDefaultModel(),
+          getAvailableModels()
+        ]);
         setSelectedModel(defaultModel);
+        setAvailableModels(fetchedModels);
+
+        const defaultModelInfo = fetchedModels.find(m => m.id === defaultModel);
+        if (defaultModelInfo) {
+          if (defaultModelInfo.thinking_mode === 'forced') {
+            setIsThinkingModeEnabled(true);
+          } else if (defaultModelInfo.thinking_mode === 'optional') {
+            setIsThinkingModeEnabled(false);
+          } else {
+            setIsThinkingModeEnabled(false);
+          }
+        }
+
       } catch (err) {
-        console.error('Failed to fetch default model:', err);
-        // フォールバックとして一時的なデフォルトモデルを使用
+        console.error('Failed to initialize app:', err);
+        setError("アプリの初期化に失敗しました。")
         setSelectedModel("qwen3");
+        setAvailableModels([{ id: "qwen3", name: "Qwen3 Fallback", provider: "ollama", thinking_mode: "optional" }]);
       } finally {
         setLoadingModel(false);
       }
@@ -64,18 +87,15 @@ function ChatContent() {
     initApp();
   }, []);
 
-  // セッション一覧を取得
   const fetchSessions = async () => {
     try {
       setLoadingSessions(true);
       const chatSessions = await getChatSessions();
 
-      // 最新のメッセージ日時情報を取得するため、各セッションのメッセージを取得
       const sessionsWithLastMessageAt = await Promise.all(
         chatSessions.map(async (session) => {
           try {
             const messages = await getChatMessages(session.id);
-            // メッセージがある場合は最後のメッセージの日時、ない場合はセッション作成日時
             const lastMessageAt = messages.length > 0
               ? new Date(messages[messages.length - 1].created_at)
               : new Date(session.created_at);
@@ -94,7 +114,6 @@ function ChatContent() {
         })
       );
 
-      // 最後のメッセージ日時の降順でソート（新しい順）
       const sortedSessions = sessionsWithLastMessageAt.sort((a, b) =>
         b.lastMessageAt.getTime() - a.lastMessageAt.getTime()
       );
@@ -108,7 +127,6 @@ function ChatContent() {
     }
   };
 
-  // 新しいチャットの準備をする（セッションはまだ作成しない）
   const prepareNewChat = () => {
     setMessages([]);
     setCurrentSession(null);
@@ -116,14 +134,12 @@ function ChatContent() {
     setError(null);
   };
 
-  // 新しいチャットセッションを作成
   const createNewSession = async (modelName?: string): Promise<ChatSession> => {
     try {
       setIsLoading(true);
       const newSession = await createChatSession(modelName);
       setCurrentSession(newSession);
 
-      // セッション一覧を更新
       await fetchSessions();
 
       setError(null);
@@ -137,19 +153,18 @@ function ChatContent() {
     }
   };
 
-  // チャット履歴を取得する関数
   const loadChatHistory = async (sessionId: number) => {
     try {
       setIsLoading(true);
       const history = await getChatMessages(sessionId);
 
-      // APIから取得したメッセージを画面表示用の形式に変換
       const formattedMessages: Message[] = history.map(msg => ({
         id: msg.id.toString(),
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
         timestamp: new Date(msg.created_at),
-        modelName: msg.model_name
+        modelName: msg.model_name,
+        thinkingContent: msg.thinking_content
       }));
 
       setMessages(formattedMessages);
@@ -162,7 +177,6 @@ function ChatContent() {
     }
   };
 
-  // セッションを選択
   const handleSessionSelect = async (sessionId: number) => {
     if (currentSession?.id === sessionId) return;
 
@@ -174,18 +188,15 @@ function ChatContent() {
     }
   };
 
-  // セッションを削除
   const handleDeleteSession = async (sessionId: number) => {
     try {
       setIsLoading(true);
       await deleteChatSession(sessionId);
 
-      // 現在表示中のセッションが削除された場合は新規チャットモードに
       if (currentSession?.id === sessionId) {
         prepareNewChat();
       }
 
-      // セッション一覧を更新
       await fetchSessions();
 
       setError(null);
@@ -197,9 +208,8 @@ function ChatContent() {
     }
   };
 
-  // メッセージ送信処理
   const handleSendMessage = async (message: string) => {
-    if (loadingModel) return; // モデルロード中は送信できないようにする
+    if (loadingModel) return;
 
     setIsLoading(true);
     setError(null);
@@ -207,7 +217,6 @@ function ChatContent() {
       const isNewChat = !currentSession;
       let sessionId = currentSession?.id;
 
-      // 新規チャットの場合はセッションを作成
       if (isNewChat) {
         try {
           const newSession = await createNewSession(selectedModel);
@@ -221,7 +230,6 @@ function ChatContent() {
         }
       }
 
-      // ユーザーメッセージを追加
       const userMessage: Message = {
         id: `temp-${Date.now()}`,
         content: message,
@@ -229,54 +237,68 @@ function ChatContent() {
         timestamp: new Date(),
         modelName: selectedModel
       };
-
       const newMessages = [...messages, userMessage];
       setMessages(newMessages);
 
-      // AIメッセージの一時プレースホルダー
       const aiMessageId = `temp-${Date.now() + 1}`;
       const aiMessage: Message = {
         id: aiMessageId,
         content: '',
+        streamingThinkingContent: '',
+        thinkingContent: null,
         role: 'assistant',
         timestamp: new Date(),
         isStreaming: true,
         modelName: selectedModel
       };
 
+      setIsThinkingDetailsOpen(true);
+      let firstAnswerChunkReceived = false;
+
       if (useStreaming) {
-        // ストリーミングモードでメッセージを送信
         setMessages([...newMessages, aiMessage]);
 
         try {
           await sendChatMessageStreaming(
             sessionId!,
             message,
-            // チャンク受信時のコールバック
-            (chunk: string) => {
-              setMessages(prev => prev.map(msg =>
-                msg.id === aiMessageId
-                  ? { ...msg, content: msg.content + chunk }
-                  : msg
-              ));
+            (chunk: string, type: 'thinking' | 'answer') => {
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === aiMessageId) {
+                  let updatedMsg = { ...msg };
+                  if (type === 'thinking') {
+                    updatedMsg.streamingThinkingContent = (updatedMsg.streamingThinkingContent || '') + chunk;
+                  } else {
+                    updatedMsg.content = msg.content + chunk;
+                    if (!firstAnswerChunkReceived) {
+                      setIsThinkingDetailsOpen(false);
+                      firstAnswerChunkReceived = true;
+                    }
+                  }
+                  return updatedMsg;
+                } else {
+                  return msg;
+                }
+              }));
             },
-            // 完了時のコールバック
-            async (fullResponse: string, responseModelName?: string) => {
+            async (fullResponse: string, responseModelName?: string, finalThinkingContent?: string | null) => {
+              setIsThinkingDetailsOpen(false);
               setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId
                   ? {
                     ...msg,
                     content: fullResponse,
                     isStreaming: false,
-                    modelName: responseModelName || selectedModel
+                    modelName: responseModelName || selectedModel,
+                    thinkingContent: finalThinkingContent,
+                    streamingThinkingContent: undefined
                   }
                   : msg
               ));
-              // 最新のセッション一覧を取得
               await fetchSessions();
             },
-            // エラー時のコールバック
             (errorMsg: string) => {
+              setIsThinkingDetailsOpen(false);
               setError(`AIからの応答の取得に失敗しました: ${errorMsg}`);
               setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId
@@ -284,39 +306,40 @@ function ChatContent() {
                   : msg
               ));
             },
-            // 使用するモデル
-            selectedModel
+            selectedModel,
+            isThinkingModeEnabled
           );
         } catch (error) {
+          setIsThinkingDetailsOpen(false);
           console.error('Streaming error:', error);
           setError('ストリーミング中にエラーが発生しました');
         }
       } else {
-        // 非ストリーミングモードでメッセージを送信
+        setIsThinkingDetailsOpen(false);
         const waitingMessage: Message = {
           ...aiMessage,
           content: '応答を待っています...',
-          isStreaming: true  // isStreamingフラグは維持（ローディングインジケータのため）
+          isStreaming: true
         };
         setMessages([...newMessages, waitingMessage]);
 
         try {
-          const response = await sendChatMessage(sessionId!, message, selectedModel);
-
+          const response = await sendChatMessage(
+            sessionId!,
+            message,
+            selectedModel,
+            isThinkingModeEnabled
+          );
           const completedMessage: Message = {
             id: aiMessageId,
             content: response.response,
             role: 'assistant',
             timestamp: new Date(),
             modelName: selectedModel,
-            isStreaming: false  // 明示的にfalseに設定
+            isStreaming: false,
+            thinkingContent: response.thinking_content ?? null
           };
-
-          setMessages(prev =>
-            prev.map(msg => msg.id === aiMessageId ? completedMessage : msg)
-          );
-
-          // 最新のセッション一覧を取得
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? completedMessage : msg));
           await fetchSessions();
         } catch (error) {
           console.error('Chat message error:', error);
@@ -331,14 +354,29 @@ function ChatContent() {
     }
   };
 
-  // ストリーミングモードの切り替え
   const toggleStreamingMode = () => {
     setUseStreaming(prev => !prev);
   };
 
-  // モデル選択の変更ハンドラ
-  const handleModelChange = (model: string) => {
-    setSelectedModel(model);
+  const toggleThinkingMode = () => {
+    const modelInfo = availableModels.find(m => m.id === selectedModel);
+    if (modelInfo?.thinking_mode === 'forced') return;
+
+    setIsThinkingModeEnabled(prev => !prev);
+  };
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    const modelInfo = availableModels.find(m => m.id === modelId);
+    if (modelInfo) {
+      if (modelInfo.thinking_mode === 'forced') {
+        setIsThinkingModeEnabled(true);
+      } else if (modelInfo.thinking_mode === 'optional') {
+        setIsThinkingModeEnabled(false);
+      } else {
+        setIsThinkingModeEnabled(false);
+      }
+    }
   };
 
   return (
@@ -352,10 +390,12 @@ function ChatContent() {
         onToggleStreaming={toggleStreamingMode}
         onModelChange={handleModelChange}
         isLoading={loadingModel}
+        availableModels={availableModels}
+        isThinkingModeEnabled={isThinkingModeEnabled}
+        onToggleThinkingMode={toggleThinkingMode}
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* サイドバー */}
         <ChatSidebar
           sessions={sessions}
           currentSessionId={currentSession?.id || null}
@@ -365,7 +405,6 @@ function ChatContent() {
           isLoading={loadingSessions || isLoading}
         />
 
-        {/* メインチャットエリア */}
         <div className="flex flex-col flex-1 overflow-hidden">
           <ChatMessages
             messages={messages}
@@ -373,6 +412,7 @@ function ChatContent() {
             error={error}
             sessionName={currentSession?.model_name}
             isNewChat={isNewChat}
+            isThinkingDetailsOpenForStreamingMessage={isThinkingDetailsOpen}
           />
 
           <ChatInput
@@ -387,7 +427,6 @@ function ChatContent() {
   );
 }
 
-// ProtectedRouteでラップして認証を要求
 export default function ChatPage() {
   return (
     <ProtectedRoute>

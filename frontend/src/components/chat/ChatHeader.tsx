@@ -15,6 +15,9 @@ type ChatHeaderProps = {
   onToggleStreaming: () => void;
   onModelChange?: (model: string) => void;
   isLoading?: boolean;
+  availableModels: AIModel[];
+  isThinkingModeEnabled?: boolean;
+  onToggleThinkingMode?: () => void;
 };
 
 const ChatHeader = ({
@@ -25,29 +28,20 @@ const ChatHeader = ({
   useStreaming,
   onToggleStreaming,
   onModelChange,
-  isLoading: externalLoading
+  isLoading: externalLoading,
+  availableModels,
+  isThinkingModeEnabled,
+  onToggleThinkingMode
 }: ChatHeaderProps) => {
   const router = useRouter();
-  const [models, setModels] = useState<AIModel[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const availableModels = await getAvailableModels();
-        setModels(availableModels);
-      } catch (error) {
-        console.error('Failed to fetch models:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const selectedModelInfo = availableModels.find(m => m.id === currentModel);
+  const thinkingModeSupport = selectedModelInfo?.thinking_mode ?? "none";
 
-    fetchModels();
-  }, []);
+  const isModelLoading = externalLoading;
 
-  // 内部ローディング状態または外部から渡されたローディング状態を使用
-  const isModelLoading = isLoading || externalLoading;
+  const isThinkingModeSwitchDisabled = thinkingModeSupport === "forced";
+  const showThinkingModeSwitch = thinkingModeSupport !== "none";
 
   return (
     <header className="bg-gray-800 text-white p-4 shadow-md">
@@ -61,18 +55,17 @@ const ChatHeader = ({
             <span className="ml-2">Sleepy Capybara Chat</span>
           </button>
 
-          {/* モデル選択ドロップダウン */}
           <div className="ml-4">
             <select
               className="bg-gray-700 text-white rounded-md px-3 py-1 text-sm"
-              value={currentModel || (models.length > 0 ? models[0].id : '')}
+              value={currentModel || (availableModels.length > 0 ? availableModels[0].id : '')}
               onChange={e => onModelChange && onModelChange(e.target.value)}
-              disabled={!onModelChange || isModelLoading || models.length === 0}
+              disabled={!onModelChange || isModelLoading || availableModels.length === 0}
             >
               {isModelLoading ? (
                 <option>読み込み中...</option>
               ) : (
-                models.map((model: AIModel) => (
+                availableModels.map((model: AIModel) => (
                   <option key={model.id} value={model.id}>
                     {model.name}
                   </option>
@@ -83,17 +76,30 @@ const ChatHeader = ({
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* ストリーミングモード切り替えスイッチ */}
+          {showThinkingModeSwitch && onToggleThinkingMode && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">思考モード:</span>
+              <button
+                onClick={onToggleThinkingMode}
+                disabled={isThinkingModeSwitchDisabled}
+                title={thinkingModeSupport === 'forced' ? "このモデルは常に思考モードが有効です" : (isThinkingModeEnabled ? "思考モード: ON" : "思考モード: OFF")}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isThinkingModeEnabled ? 'bg-green-600' : 'bg-gray-500'} ${isThinkingModeSwitchDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isThinkingModeEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center space-x-2">
             <span className="text-sm">ストリーミング:</span>
             <button
               onClick={onToggleStreaming}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full ${useStreaming ? 'bg-blue-600' : 'bg-gray-500'
-                }`}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full ${useStreaming ? 'bg-blue-600' : 'bg-gray-500'}`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${useStreaming ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${useStreaming ? 'translate-x-6' : 'translate-x-1'}`}
               />
             </button>
           </div>
