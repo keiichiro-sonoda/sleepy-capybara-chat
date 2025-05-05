@@ -69,7 +69,37 @@ function ChatContent() {
     try {
       setLoadingSessions(true);
       const chatSessions = await getChatSessions();
-      setSessions(chatSessions);
+
+      // 最新のメッセージ日時情報を取得するため、各セッションのメッセージを取得
+      const sessionsWithLastMessageAt = await Promise.all(
+        chatSessions.map(async (session) => {
+          try {
+            const messages = await getChatMessages(session.id);
+            // メッセージがある場合は最後のメッセージの日時、ない場合はセッション作成日時
+            const lastMessageAt = messages.length > 0
+              ? new Date(messages[messages.length - 1].created_at)
+              : new Date(session.created_at);
+
+            return {
+              ...session,
+              lastMessageAt
+            };
+          } catch (err) {
+            console.error(`Failed to fetch messages for session ${session.id}:`, err);
+            return {
+              ...session,
+              lastMessageAt: new Date(session.created_at)
+            };
+          }
+        })
+      );
+
+      // 最後のメッセージ日時の降順でソート（新しい順）
+      const sortedSessions = sessionsWithLastMessageAt.sort((a, b) =>
+        b.lastMessageAt.getTime() - a.lastMessageAt.getTime()
+      );
+
+      setSessions(sortedSessions);
     } catch (err) {
       console.error('Failed to fetch chat sessions:', err);
       setError('チャットセッションの取得に失敗しました');

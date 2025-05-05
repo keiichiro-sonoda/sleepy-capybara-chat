@@ -1,8 +1,14 @@
-import { useState, useEffect } from 'react';
 import { ChatSession } from '@/utils/api';
+import { formatDistanceToNow } from 'date-fns';
+import { ja } from 'date-fns/locale';
+
+// ChatSessionを拡張した型を定義
+interface ExtendedChatSession extends ChatSession {
+  lastMessageAt?: Date;
+}
 
 type ChatSidebarProps = {
-  sessions: ChatSession[];
+  sessions: ExtendedChatSession[];
   currentSessionId: number | null;
   onSessionSelect: (sessionId: number) => void;
   onDeleteSession: (sessionId: number) => void;
@@ -18,6 +24,12 @@ const ChatSidebar = ({
   onNewChat,
   isLoading
 }: ChatSidebarProps) => {
+  // 日付をフォーマットする関数
+  const formatDate = (date?: Date) => {
+    if (!date) return '';
+    return formatDistanceToNow(date, { addSuffix: true, locale: ja });
+  };
+
   return (
     <div className="w-64 bg-gray-800 text-white h-full flex flex-col">
       <div className="p-4 border-b border-gray-700">
@@ -54,8 +66,8 @@ const ChatSidebar = ({
                     <button
                       onClick={() => onSessionSelect(session.id)}
                       className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${currentSessionId === session.id
-                          ? 'bg-gray-700 text-white'
-                          : 'text-gray-300 hover:bg-gray-700'
+                        ? 'bg-gray-700 text-white'
+                        : 'text-gray-300 hover:bg-gray-700'
                         }`}
                     >
                       <div className="flex items-center">
@@ -77,7 +89,14 @@ const ChatSidebar = ({
                           <p className="truncate">
                             {session.name || new Date(session.created_at).toLocaleDateString()}
                           </p>
-                          <p className="text-xs text-gray-400">{session.model_name}</p>
+                          <div className="text-xs">
+                            <span className="text-gray-400">{session.model_name}</span>
+                            {session.lastMessageAt && (
+                              <span className="text-gray-500 ml-2">
+                                {formatDate(session.lastMessageAt)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </button>
