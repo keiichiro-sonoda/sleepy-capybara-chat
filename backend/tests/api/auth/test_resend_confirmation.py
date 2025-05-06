@@ -1,8 +1,12 @@
 import pytest
+import sys
+import os
 from unittest.mock import patch, AsyncMock
 from datetime import datetime, timedelta, timezone
 from fastapi import status
 from sqlalchemy.orm import Session
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from app.models.user import User
 from app.core.token import set_verification_token, verify_token
