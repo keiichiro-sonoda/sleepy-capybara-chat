@@ -115,7 +115,22 @@ async def resend_confirmation(
     """
     Resend confirmation email to users who have an expired token or did not receive the original email.
     Returns a success message regardless of whether the email exists for security reasons.
+    Includes rate limiting to prevent abuse.
     """
+    from app.models.email.resend_tracking import EmailResendTracking
+    
+    can_resend, limit_message, next_available = EmailResendTracking.can_resend(db, request.email)
+    
+    if not can_resend:
+        next_time_str = next_available.strftime("%Y-%m-%d %H:%M:%S UTC") if next_available else ""
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": limit_message,
+                "next_available": next_time_str
+            }
+        )
+    
     user = db.query(User).filter(User.email == request.email).first()
     
     if user and not user.is_verified:
@@ -123,6 +138,8 @@ async def resend_confirmation(
             token = set_verification_token(db, user)
             
             await send_verification_email(user.email, token)
+            
+            EmailResendTracking.update_tracking(db, request.email)
             
         except Exception as e:
             db.rollback()

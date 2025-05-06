@@ -113,12 +113,19 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="text-sm text-center">
-          <Link href="/auth/register" className="text-blue-600 hover:text-blue-500">
-            アカウントをお持ちでない方はこちら
-          </Link>
+        <div className="text-sm text-center space-y-2">
+          <p>
+            <Link href="/auth/register" className="text-blue-600 hover:text-blue-500">
+              アカウントをお持ちでない方はこちら
+            </Link>
+          </p>
+          <p>
+            <Link href="/auth/resend-confirmation" className="text-blue-600 hover:text-blue-500">
+              確認メールを再送信する
+            </Link>
+          </p>
         </div>
       </div>
     </div>
   );
-} 
+}  

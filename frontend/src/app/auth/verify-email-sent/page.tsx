@@ -31,8 +31,13 @@ export default function VerifyEmailSentPage() {
               ログインページに戻る
             </Link>
           </p>
+          <p>
+            <Link href="/auth/resend-confirmation" className="text-blue-600 hover:text-blue-500">
+              確認メールを再送信する
+            </Link>
+          </p>
         </div>
       </div>
     </div>
   );
-} 
+}  
