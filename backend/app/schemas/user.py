@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
 class UserBase(BaseModel):
@@ -10,11 +10,13 @@ class UserBase(BaseModel):
     created_at: datetime
 
 
-class UserList(UserBase):
+class UserList(BaseModel):
     id: int
+    email: EmailStr
+    is_verified: bool
+    is_admin: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Userスキーマを追加 (UserListと同じ内容)
