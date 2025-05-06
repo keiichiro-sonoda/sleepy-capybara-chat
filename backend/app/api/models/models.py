@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[AIModel])
-def get_available_models():
+def get_available_models() -> list[AIModel]:
     """
     利用可能なAIモデルのリストを返すエンドポイント
     """
@@ -14,7 +14,7 @@ def get_available_models():
 
 
 @router.get("/default", response_model=str)
-def get_default_model():
+def get_default_model() -> str:
     """
     デフォルトのAIモデルIDを返すエンドポイント
     """

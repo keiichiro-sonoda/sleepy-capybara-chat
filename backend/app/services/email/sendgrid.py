@@ -1,5 +1,5 @@
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (
+from sendgrid import SendGridAPIClient  # type: ignore
+from sendgrid.helpers.mail import (  # type: ignore
     Mail,
     Email,
     To,

@@ -9,7 +9,7 @@ settings = get_settings()
 
 
 class MailHogService(EmailService):
-    def __init__(self):
+    def __init__(self) -> None:
         self.conf = ConnectionConfig(
             MAIL_USERNAME=settings.MAIL_USERNAME,
             MAIL_PASSWORD=SecretStr(settings.MAIL_PASSWORD),

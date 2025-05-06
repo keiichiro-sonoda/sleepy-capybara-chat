@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.token_usage import TokenUsage
 from app.models.token_limit import TokenLimit, LimitType
+from app.schemas.token_usage import TokenUsageByModel
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class TokenUsageService:
     @staticmethod
     async def get_usage_stats_by_model(
         db: Session, user_id: int, days: int = 30
-    ) -> list[dict]:
+    ) -> list[TokenUsageByModel]:
         """指定期間のモデルごとのトークン使用統計を取得する"""
         start_time = datetime.now(UTC) - timedelta(days=days)
 
@@ -100,16 +101,16 @@ class TokenUsageService:
 
         results = query.all()
 
-        # 結果を辞書のリストに変換
-        stats = []
+        # 結果を TokenUsageByModel のリストに変換
+        stats: list[TokenUsageByModel] = []
         for row in results:
             stats.append(
-                {
-                    "model_name": row.model_name,
-                    "total_prompt_tokens": row.total_prompt_tokens or 0,
-                    "total_completion_tokens": row.total_completion_tokens or 0,
-                    "total_tokens": row.total_tokens or 0,
-                }
+                TokenUsageByModel(
+                    model_name=row.model_name,
+                    total_prompt_tokens=row.total_prompt_tokens or 0,
+                    total_completion_tokens=row.total_completion_tokens or 0,
+                    total_tokens=row.total_tokens or 0,
+                )
             )
 
         return stats

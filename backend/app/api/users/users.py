@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.db.session import get_db
 from app.core.security import get_current_user
@@ -11,12 +10,12 @@ from app.schemas.user import User
 router = APIRouter()
 
 
-@router.get("/me/token-usage/by-model", response_model=List[TokenUsageByModel])
+@router.get("/me/token-usage/by-model", response_model=list[TokenUsageByModel])
 async def get_my_token_usage_by_model(
     days: int = 30,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> list[TokenUsageByModel]:
     """
     自分自身のモデルごとのトークン使用量を取得する
     """

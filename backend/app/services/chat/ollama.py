@@ -2,7 +2,7 @@ import logging
 import json
 import asyncio
 import re
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, cast
 import httpx
 
 from app.services.chat.base import ModelProvider
@@ -31,7 +31,7 @@ class OllamaProvider(ModelProvider):
         model_name: str,
         stream: bool = False,
         thinking_mode: bool = False,
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """Ollamaのチャットエンドポイントを呼び出す"""
         processed_messages = messages.copy()  # メッセージリストをコピーして変更
 
@@ -121,7 +121,7 @@ class OllamaProvider(ModelProvider):
                 "token_usage": token_usage,
             }
 
-    def _extract_thinking_and_answer(self, text: str) -> tuple[str, str]:
+    def _extract_thinking_and_answer(self, text: str) -> tuple[str | None, str]:
         """思考部分と回答部分を抽出する"""
         # デバッグ用：入力テキストの先頭部分をログ出力
         preview_text = text[:200] + ("..." if len(text) > 200 else "")
@@ -160,7 +160,7 @@ class OllamaProvider(ModelProvider):
 
     async def _stream_chat_response(
         self, request_data: dict, thinking_mode: bool = False
-    ) -> AsyncGenerator[tuple[str, str, bool, dict], None]:
+    ) -> AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """Ollamaストリーミングレスポンスをジェネレータとして処理 (チャンクタイプ付き)"""
         complete_response = ""
         complete_thinking = ""
@@ -360,7 +360,8 @@ class OllamaProvider(ModelProvider):
                     return ""
 
                 response_data = response.json()
-                return response_data.get("response", "").strip()
+                # Cast the result of get().strip() to str before returning
+                return cast(str, response_data.get("response", "").strip())
 
         except Exception as e:
             logger.error(f"Error generating text: {e}")

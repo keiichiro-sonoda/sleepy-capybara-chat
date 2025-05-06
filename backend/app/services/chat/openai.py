@@ -1,8 +1,9 @@
 import logging
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, cast
 
 from fastapi import HTTPException
 from openai import AsyncOpenAI
+from openai.types.responses import ResponseInputItemParam
 
 from app.core.config import get_settings
 from app.services.chat.base import ModelProvider
@@ -15,13 +16,17 @@ logger.setLevel(logging.DEBUG)
 class OpenAIProvider(ModelProvider):
     """OpenAIプロバイダの実装 - 公式SDKを使用"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         settings = get_settings()
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def chat_completion(
-        self, messages: list[dict[str, str]], model_name: str, stream: bool = False
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
+        self,
+        messages: list[dict[str, str]],
+        model_name: str,
+        stream: bool = False,
+        thinking_mode: bool = False,
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """OpenAIのChat Completions APIを呼び出す"""
         try:
             # すべてのモデルでResponses APIを使用
@@ -46,21 +51,27 @@ class OpenAIProvider(ModelProvider):
 
     def _convert_messages_format(
         self, messages: list[dict[str, str]]
-    ) -> list[dict[str, str]]:
+    ) -> list[ResponseInputItemParam]:
         """標準メッセージ形式をResponses API形式に変換"""
-        converted = []
+        converted: list[ResponseInputItemParam] = []
 
         for msg in messages:
             role = msg.get("role", "")
             content = msg.get("content", "")
 
+            # Create the dictionary first
+            message_dict = {}
             # システムメッセージはdeveloperロールとして扱う
             if role == "system":
-                converted.append({"role": "developer", "content": content})
+                message_dict = {"role": "developer", "content": content}
             elif role == "user":
-                converted.append({"role": "user", "content": content})
+                message_dict = {"role": "user", "content": content}
             elif role == "assistant":
-                converted.append({"role": "assistant", "content": content})
+                message_dict = {"role": "assistant", "content": content}
+
+            # Append the casted dictionary if it's not empty
+            if message_dict:
+                converted.append(cast(ResponseInputItemParam, message_dict))
 
         return converted
 
@@ -140,7 +151,7 @@ class OpenAIProvider(ModelProvider):
 
     async def _stream_responses(
         self, messages: list[dict[str, str]], model_name: str
-    ) -> AsyncGenerator[tuple[str, bool, dict], None]:
+    ) -> AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """ストリーミングResponses APIを呼び出す"""
         converted_messages = self._convert_messages_format(messages)
         logger.debug(f"Sending to Responses API (streaming): {converted_messages}")
@@ -187,9 +198,10 @@ class OpenAIProvider(ModelProvider):
                         logger.debug(f"Captured response_id from event: {response_id}")
 
                 # テキストチャンクの処理
-                if event_type == "ResponseTextDeltaEvent":
-                    full_response += chunk.delta
-                    yield (chunk.delta, "answer", False, {})
+                if event_type == "ResponseTextDeltaEvent" and hasattr(chunk, "delta"):
+                    delta_text = getattr(chunk, "delta", "")
+                    full_response += delta_text
+                    yield (delta_text, "answer", False, {})
 
                 # ストリーミング完了イベントの処理
                 elif event_type in ["ResponseTextDoneEvent", "ResponseCompletedEvent"]:
@@ -200,7 +212,11 @@ class OpenAIProvider(ModelProvider):
                     break
 
             # トークン使用量データの取得
-            usage_data = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            usage_data: dict[str, int] = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            }
 
             # 1. 直接的な方法：イベントから直接usage情報を取得
             if hasattr(chunk, "usage") and chunk.usage:

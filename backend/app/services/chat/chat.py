@@ -77,7 +77,7 @@ class ChatService:
         model_name: str,
         stream: bool = False,
         thinking_mode: bool = False,
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
         provider_name, actual_model = ChatService.get_provider_from_model(model_name)
         logger.debug(
@@ -120,6 +120,6 @@ class ChatService:
     def get_thinking_mode_support(model_name: str) -> str:
         """モデルの思考モードサポート状況を取得"""
         for model in AVAILABLE_MODELS:
-            if model["id"] == model_name:
-                return model.get("thinking_mode", "none")
+            if model.id == model_name:
+                return model.thinking_mode
         return "none"  # デフォルトは思考モードなし

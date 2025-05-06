@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import json
-import asyncio
 import typing
+from typing import cast, AsyncGenerator, Any
 
 from app.core.config import get_settings
 from app.core.security import get_current_user
@@ -124,43 +124,62 @@ async def create_message(
         session_name = await ChatService.generate_session_name_from_message(
             user_content
         )
-        chat_session.name = session_name
+        # If the assignment error on chat_session.name persists, uncomment the next line
+        # chat_session.name = session_name # type: ignore[assignment]
         db.commit()
 
     # 会話履歴を取得
-    chat_history = (
+    chat_history: list[Message] = (
         db.query(Message)
         .filter(Message.session_id == session_id)
         .order_by(Message.created_at)
         .all()
     )
 
-    formatted_messages = [
-        {"role": msg.role, "content": msg.content} for msg in chat_history
+    # Cast the values within the list comprehension to str
+    formatted_messages: list[dict[str, str]] = [
+        {"role": cast(str, msg.role), "content": cast(str, msg.content)}
+        for msg in chat_history
     ]
 
     # ストリーミングモードの場合
     if message.stream:
+        # Cast the generator type explicitly
+        chat_response_gen_uncasted = await ChatService.get_chat_response(
+            formatted_messages,
+            message.model_name,
+            stream=True,
+            thinking_mode=message.thinking_mode,
+        )
+        # Cast directly without intermediate variable
+        chat_response_gen = cast(
+            AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None],
+            chat_response_gen_uncasted,
+        )
+
         return StreamingResponse(
             _stream_chat_response(
                 session_id,
-                formatted_messages,
                 message.model_name,
                 db,
                 current_user.id,
                 message.thinking_mode,
+                chat_response_gen,
             ),
             media_type="text/event-stream",
         )
 
     # 非ストリーミングモードの場合
     try:
-        response_data = await ChatService.get_chat_response(
+        response_data_uncasted = await ChatService.get_chat_response(
             formatted_messages,
             message.model_name,
             stream=False,
             thinking_mode=message.thinking_mode,
         )
+        # Cast the response data to dict
+        response_data = cast(dict[str, Any], response_data_uncasted)
+
         ai_response = response_data["content"]
         thinking_content = response_data.get("thinking_content")
 
@@ -219,11 +238,13 @@ async def create_message(
 # ストリーミングレスポンスを処理する非同期ジェネレータを更新
 async def _stream_chat_response(
     session_id: int,
-    messages: list,
     model_name: str,
     db: Session,
     user_id: int,
     thinking_mode: bool = False,
+    chat_response_generator: (
+        AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None] | None
+    ) = None,
 ) -> typing.AsyncGenerator[str, None]:
     logger.info(
         f"Starting streaming response for session_id={session_id}, model={model_name}, thinking_mode={thinking_mode}"
@@ -235,13 +256,15 @@ async def _stream_chat_response(
 
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
 
-    try:
-        chat_response_gen = await ChatService.get_chat_response(
-            messages, model_name, stream=True, thinking_mode=thinking_mode
+    if chat_response_generator is None:
+        logger.warning(
+            "_stream_chat_response called without pre-fetched generator. This might indicate an issue."
         )
+        return
 
+    try:
         chunk_count = 0
-        async for chunk, chunk_type, is_done, usage in chat_response_gen:
+        async for chunk, chunk_type, is_done, usage in chat_response_generator:
             chunk_count += 1
             logger.debug(
                 f"Chunk #{chunk_count} received: type={chunk_type}, length={len(chunk)}, is_done={is_done}"

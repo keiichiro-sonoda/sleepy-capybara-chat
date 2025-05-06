@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Enum as SQLAlchemyEnum, ForeignKey
+from sqlalchemy import Integer, String, Enum as SQLAlchemyEnum, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 import enum
 
@@ -16,15 +17,17 @@ class LimitType(str, enum.Enum):
 class TokenLimit(Base):
     __tablename__ = "token_limits"
 
-    id = Column(Integer, primary_key=True, index=True)
-    model_name = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    model_name: Mapped[str | None] = mapped_column(
         String(255), index=True, nullable=True
     )  # NULLの場合は全モデル共通の制限
-    user_id = Column(
+    user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id"), index=True, nullable=True
     )  # NULLの場合は全ユーザー共通の制限
-    limit_type = Column(SQLAlchemyEnum(LimitType), nullable=False)
-    limit_value = Column(Integer, nullable=False)
+    limit_type: Mapped[LimitType] = mapped_column(
+        SQLAlchemyEnum(LimitType), nullable=False
+    )
+    limit_value: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # リレーションシップ (必要に応じて)
     # user = relationship("User")

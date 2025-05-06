@@ -16,7 +16,7 @@ class ModelProvider(ABC):
         model_name: str,
         stream: bool = False,
         thinking_mode: bool = False,
-    ) -> dict[str, Any] | AsyncGenerator[tuple[str, bool, dict], None]:
+    ) -> dict[str, Any] | AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """
         チャット形式での補完を行う
 
