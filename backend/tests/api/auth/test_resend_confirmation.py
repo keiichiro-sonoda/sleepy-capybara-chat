@@ -5,6 +5,7 @@ from unittest.mock import patch, AsyncMock
 from datetime import datetime, timedelta, timezone
 from fastapi import status
 from sqlalchemy.orm import Session
+import pytest_asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -42,6 +43,7 @@ def verified_user(db: Session):
     db.commit()
 
 
+@pytest.mark.asyncio
 @patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
 async def test_resend_confirmation_to_unverified_user(
     mock_send_email, client, db: Session, unverified_user
@@ -69,6 +71,7 @@ async def test_resend_confirmation_to_unverified_user(
     assert (expiry - now).total_seconds() < 25 * 3600  # At most 25 hours
 
 
+@pytest.mark.asyncio
 @patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
 async def test_resend_confirmation_to_verified_user(
     mock_send_email, client, verified_user
@@ -87,6 +90,7 @@ async def test_resend_confirmation_to_verified_user(
     mock_send_email.assert_not_called()
 
 
+@pytest.mark.asyncio
 @patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
 async def test_resend_confirmation_to_nonexistent_user(mock_send_email, client):
     """Test resending confirmation to a non-existent user."""
