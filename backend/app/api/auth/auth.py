@@ -2,6 +2,9 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.core.security import (
@@ -16,6 +19,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import Token, UserCreate, User as UserSchema
 from app.schemas.user import UserList
+from app.schemas.email import ResendConfirmationRequest
 from app.services.email import send_verification_email
 
 router = APIRouter()
@@ -102,6 +106,33 @@ async def login(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/resend-confirmation")
+async def resend_confirmation(
+    request: ResendConfirmationRequest, db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """
+    Resend confirmation email to users who have an expired token or did not receive the original email.
+    Returns a success message regardless of whether the email exists for security reasons.
+    """
+    user = db.query(User).filter(User.email == request.email).first()
+    
+    if user and not user.is_verified:
+        try:
+            token = set_verification_token(db, user)
+            
+            await send_verification_email(user.email, token)
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to resend confirmation email: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to resend confirmation email",
+            )
+    
+    return {"message": "If your email is registered and not verified, a new confirmation email has been sent."}
 
 
 # パスワードリセット関連エンドポイントも追加
