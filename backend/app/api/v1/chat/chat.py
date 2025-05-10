@@ -89,6 +89,15 @@ async def create_message(
         f"💬 Message request received: model={message.model_name}, thinking_mode={message.thinking_mode}, content_preview='{message.content[:30]}...'"
     )
 
+    # トークン制限チェック
+    is_allowed, reason = await TokenUsageService.check_token_limit(
+        db, current_user.id, message.model_name
+    )
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=reason
+        )
+
     # セッションの存在確認
     chat_session = (
         db.query(ChatSession)

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.user import User
 from app.models.chat import ChatSession
-from app.db.session import Base
+from app.models.base import Base
 
 
 class TokenUsage(Base):
@@ -22,6 +22,7 @@ class TokenUsage(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    effective_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
@@ -32,3 +33,6 @@ class TokenUsage(Base):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.total_tokens = self.prompt_tokens + self.completion_tokens
+
+        # 実質トークン数の計算（初期化時にモデル名から比率を取得して計算する必要がある）
+        # このコードはサービス側で計算して渡す方が適切なので、ここではデフォルト値の設定のみ

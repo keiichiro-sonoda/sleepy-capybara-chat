@@ -60,3 +60,15 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Get current user and verify they have admin privileges."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have admin privileges",
+        )
+    return current_user

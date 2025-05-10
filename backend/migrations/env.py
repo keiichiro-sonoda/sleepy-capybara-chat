@@ -10,9 +10,19 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.models.base import Base
-from app.models.user import User
+# アプリケーションの設定をインポート
 from app.core.config import get_settings
+
+# モデルベースをインポート
+from app.models.base import Base
+
+# 全てのモデルファイルを明示的にインポート
+# これにより各モデルクラスがBase.metadataに登録される
+from app.models.user import User
+from app.models.chat import ChatSession, Message
+from app.models.token_usage import TokenUsage
+from app.models.token_limit import TokenLimit
+# 他にもモデルがあれば、ここにインポート文を追加
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -29,8 +39,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
+# target_metadataは全てのモデルがインポートされた後に設定
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

@@ -1,5 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, ConfigDict
+from app.schemas.token_limit import TokenLimit
 
 
 class UserBase(BaseModel):
@@ -22,3 +23,9 @@ class UserList(BaseModel):
 # Userスキーマを追加 (UserListと同じ内容)
 class User(UserList):
     pass
+
+
+class UserWithTokenLimits(User):
+    token_limits: list[TokenLimit] = []
+
+    model_config = ConfigDict(from_attributes=True)

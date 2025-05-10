@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Integer, String, DateTime, func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from app.db.session import Base
+from app.models.base import Base
 
 
 class User(Base):
@@ -33,3 +33,4 @@ class User(Base):
 
     # リレーションシップ
     chat_sessions = relationship("ChatSession", back_populates="user")
+    token_limits = relationship("TokenLimit", back_populates="user")

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from app.core.config import get_settings
-from app.api import auth, chat, models, users
+from app.api import api_router
 from app.db.session import Base, engine, SessionLocal
 from app.db.seed import seed_admin_user
 
@@ -51,11 +51,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ルーターの登録
-app.include_router(auth, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
-app.include_router(chat, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
-app.include_router(models, prefix=f"{settings.API_V1_STR}/models", tags=["models"])
-app.include_router(users, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
+# APIルーターの登録
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

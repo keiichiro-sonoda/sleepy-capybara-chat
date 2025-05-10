@@ -1,14 +1,13 @@
 from typing import Generator
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import get_settings
+from app.models.base import Base  # Base クラスをインポート
 
 settings = get_settings()
 
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
 
 
 # データベースセッションの依存性

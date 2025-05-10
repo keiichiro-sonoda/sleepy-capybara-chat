@@ -4,13 +4,35 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.token_usage import TokenUsage
-from app.models.token_limit import TokenLimit, LimitType
+from app.models.token_limit import TokenLimit, PeriodUnit
 from app.schemas.token_usage import TokenUsageByModel
+from app.schemas.chat import AVAILABLE_MODELS
 
 logger = logging.getLogger(__name__)
 
 
 class TokenUsageService:
+    @staticmethod
+    def get_model_token_ratio(model_name: str) -> float:
+        """モデル名から入出力トークン比率を取得する"""
+        for model in AVAILABLE_MODELS:
+            if model.id == model_name:
+                return model.effective_token_ratio
+        # デフォルト値（見つからない場合は1.0）
+        return 1.0
+
+    @staticmethod
+    def calculate_effective_tokens(
+        model_name: str, prompt_tokens: int, completion_tokens: int
+    ) -> int:
+        """実質トークン数を計算する（入出力の比率を考慮）"""
+        # モデルの入出力トークン比率を取得
+        token_ratio = TokenUsageService.get_model_token_ratio(model_name)
+
+        # 入力トークン + (出力トークン * 比率)
+        effective_tokens = prompt_tokens + int(completion_tokens * token_ratio)
+        return effective_tokens
+
     @staticmethod
     async def record_token_usage(
         db: Session,
@@ -21,12 +43,19 @@ class TokenUsageService:
     ) -> TokenUsage:
         """トークン使用量を記録する"""
         total_tokens = prompt_tokens + completion_tokens
+
+        # 実質トークン数を計算
+        effective_tokens = TokenUsageService.calculate_effective_tokens(
+            model_name, prompt_tokens, completion_tokens
+        )
+
         token_usage = TokenUsage(
             user_id=user_id,
             model_name=model_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
+            effective_tokens=effective_tokens,
         )
         db.add(token_usage)
         db.commit()
@@ -34,38 +63,56 @@ class TokenUsageService:
         return token_usage
 
     @staticmethod
+    def get_model_default_limit(model_name: str) -> tuple[int, PeriodUnit, int] | None:
+        """モデルのデフォルトトークン制限を取得する"""
+        for model in AVAILABLE_MODELS:
+            if model.id == model_name:
+                return (
+                    model.default_limit_value,
+                    model.default_limit_period_unit,
+                    model.default_limit_period_value,
+                )
+        return None
+
+    @staticmethod
     async def check_token_limit(
         db: Session, user_id: int, model_name: str
     ) -> tuple[bool, str]:
-        """トークン制限をチェックする"""
+        """トークン制限をチェックする（実質トークン数ベース）"""
         now = datetime.now(UTC)
 
-        # 制限設定を取得（ユーザー固有 -> モデル固有 -> グローバルの順）
-        limits = (
+        # ユーザー固有の制限を確認
+        user_limits = (
             db.query(TokenLimit)
             .filter(
-                (TokenLimit.user_id == user_id) | (TokenLimit.user_id.is_(None)),
-                (TokenLimit.model_name == model_name)
-                | (TokenLimit.model_name.is_(None)),
+                TokenLimit.user_id == user_id,
+                TokenLimit.model_name == model_name,
             )
             .all()
         )
 
-        for limit in limits:
-            # 期間に応じた使用量を集計
-            start_time = now
-            if limit.limit_type == LimitType.TOKENS_PER_MINUTE:
-                start_time = now - timedelta(minutes=1)
-            elif limit.limit_type == LimitType.TOKENS_PER_HOUR:
-                start_time = now - timedelta(hours=1)
-            elif limit.limit_type == LimitType.TOKENS_PER_DAY:
-                start_time = now - timedelta(days=1)
-            elif limit.limit_type == LimitType.TOKENS_PER_MONTH:
-                start_time = now - timedelta(days=30)
+        # ユーザー固有の制限がない場合は、モデルのデフォルト制限を使用
+        if not user_limits:
+            default_limit = TokenUsageService.get_model_default_limit(model_name)
+            if not default_limit:
+                # デフォルト制限も見つからない場合は制限なしとして扱う
+                return True, "No limit found"
 
-            # 期間内の使用量を集計
+            limit_value, period_unit, period_value = default_limit
+            # 期間に応じた開始時刻を計算
+            start_time = now
+            if period_unit == PeriodUnit.MINUTE:
+                start_time = now - timedelta(minutes=period_value)
+            elif period_unit == PeriodUnit.HOUR:
+                start_time = now - timedelta(hours=period_value)
+            elif period_unit == PeriodUnit.DAY:
+                start_time = now - timedelta(days=period_value)
+            elif period_unit == PeriodUnit.MONTH:
+                start_time = now - timedelta(days=period_value * 30)  # 簡易的な月計算
+
+            # 期間内の使用量を集計（実質トークン数ベース）
             usage = (
-                db.query(func.sum(TokenUsage.total_tokens))
+                db.query(func.sum(TokenUsage.effective_tokens))
                 .filter(
                     TokenUsage.user_id == user_id,
                     TokenUsage.model_name == model_name,
@@ -74,9 +121,44 @@ class TokenUsageService:
                 .scalar()
             ) or 0
 
-            # 制限を超えている場合
+            if usage >= limit_value:
+                return (
+                    False,
+                    f"Default token limit exceeded for {period_value} {period_unit.value}(s)",
+                )
+            return True, "OK"
+
+        # ユーザー固有の制限をチェック
+        for limit in user_limits:
+            # 期間に応じた開始時刻を計算
+            start_time = now
+            if limit.period_unit == PeriodUnit.MINUTE:
+                start_time = now - timedelta(minutes=limit.period_value)
+            elif limit.period_unit == PeriodUnit.HOUR:
+                start_time = now - timedelta(hours=limit.period_value)
+            elif limit.period_unit == PeriodUnit.DAY:
+                start_time = now - timedelta(days=limit.period_value)
+            elif limit.period_unit == PeriodUnit.MONTH:
+                start_time = now - timedelta(
+                    days=limit.period_value * 30
+                )  # 簡易的な月計算
+
+            # 期間内の使用量を集計（実質トークン数ベース）
+            usage = (
+                db.query(func.sum(TokenUsage.effective_tokens))
+                .filter(
+                    TokenUsage.user_id == user_id,
+                    TokenUsage.model_name == model_name,
+                    TokenUsage.timestamp >= start_time,
+                )
+                .scalar()
+            ) or 0
+
             if usage >= limit.limit_value:
-                return False, f"Token limit exceeded: {limit.limit_type.value}"
+                return (
+                    False,
+                    f"Token limit exceeded for {limit.period_value} {limit.period_unit.value}(s)",
+                )
 
         return True, "OK"
 
@@ -94,6 +176,7 @@ class TokenUsageService:
                 func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                 func.sum(TokenUsage.completion_tokens).label("total_completion_tokens"),
                 func.sum(TokenUsage.total_tokens).label("total_tokens"),
+                func.sum(TokenUsage.effective_tokens).label("effective_tokens"),
             )
             .filter(TokenUsage.user_id == user_id, TokenUsage.timestamp >= start_time)
             .group_by(TokenUsage.model_name)
@@ -110,6 +193,7 @@ class TokenUsageService:
                     total_prompt_tokens=row.total_prompt_tokens or 0,
                     total_completion_tokens=row.total_completion_tokens or 0,
                     total_tokens=row.total_tokens or 0,
+                    effective_tokens=row.effective_tokens or 0,
                 )
             )
 
