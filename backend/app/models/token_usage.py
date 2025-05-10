@@ -18,7 +18,7 @@ class TokenUsage(Base):
     session_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("chat_sessions.id"), nullable=True, index=True
     )
-    model_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

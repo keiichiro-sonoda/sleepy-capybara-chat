@@ -7,29 +7,29 @@ from app.models.token_usage import TokenUsage
 from app.models.token_limit import TokenLimit, PeriodUnit
 from app.schemas.token_usage import TokenUsageByModel
 from app.schemas.chat import AVAILABLE_MODELS
+from app.schemas.enums import AIModelId
 
 logger = logging.getLogger(__name__)
 
 
 class TokenUsageService:
     @staticmethod
-    def get_model_token_ratio(model_name: str) -> float:
+    def get_model_token_ratio(model_id: AIModelId) -> float:
         """モデル名から入出力トークン比率を取得する"""
         for model in AVAILABLE_MODELS:
-            if model.id == model_name:
+            if model.id == model_id:
                 return model.effective_token_ratio
         # デフォルト値（見つからない場合は1.0）
         return 1.0
 
     @staticmethod
     def calculate_effective_tokens(
-        model_name: str, prompt_tokens: int, completion_tokens: int
+        model_id: AIModelId,
+        prompt_tokens: int,
+        completion_tokens: int,
     ) -> int:
         """実質トークン数を計算する（入出力の比率を考慮）"""
-        # モデルの入出力トークン比率を取得
-        token_ratio = TokenUsageService.get_model_token_ratio(model_name)
-
-        # 入力トークン + (出力トークン * 比率)
+        token_ratio = TokenUsageService.get_model_token_ratio(model_id)
         effective_tokens = prompt_tokens + int(completion_tokens * token_ratio)
         return effective_tokens
 
@@ -37,21 +37,19 @@ class TokenUsageService:
     async def record_token_usage(
         db: Session,
         user_id: int,
-        model_name: str,
+        model_id: AIModelId,
         prompt_tokens: int,
         completion_tokens: int,
     ) -> TokenUsage:
         """トークン使用量を記録する"""
         total_tokens = prompt_tokens + completion_tokens
-
-        # 実質トークン数を計算
         effective_tokens = TokenUsageService.calculate_effective_tokens(
-            model_name, prompt_tokens, completion_tokens
+            model_id, prompt_tokens, completion_tokens
         )
 
         token_usage = TokenUsage(
             user_id=user_id,
-            model_name=model_name,
+            model_id=model_id.value,  # DB model_id is string
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
@@ -63,10 +61,12 @@ class TokenUsageService:
         return token_usage
 
     @staticmethod
-    def get_model_default_limit(model_name: str) -> tuple[int, PeriodUnit, int] | None:
+    def get_model_default_limit(
+        model_id: AIModelId,
+    ) -> tuple[int, PeriodUnit, int] | None:
         """モデルのデフォルトトークン制限を取得する"""
         for model in AVAILABLE_MODELS:
-            if model.id == model_name:
+            if model.id == model_id:
                 return (
                     model.default_limit_value,
                     model.default_limit_period_unit,
@@ -76,7 +76,7 @@ class TokenUsageService:
 
     @staticmethod
     async def check_token_limit(
-        db: Session, user_id: int, model_name: str
+        db: Session, user_id: int, model_id: AIModelId
     ) -> tuple[bool, str]:
         """トークン制限をチェックする（実質トークン数ベース）"""
         now = datetime.now(UTC)
@@ -86,14 +86,14 @@ class TokenUsageService:
             db.query(TokenLimit)
             .filter(
                 TokenLimit.user_id == user_id,
-                TokenLimit.model_name == model_name,
+                TokenLimit.model_id == model_id,  # TokenLimit.model_id is Enum
             )
             .all()
         )
 
         # ユーザー固有の制限がない場合は、モデルのデフォルト制限を使用
         if not user_limits:
-            default_limit = TokenUsageService.get_model_default_limit(model_name)
+            default_limit = TokenUsageService.get_model_default_limit(model_id)
             if not default_limit:
                 # デフォルト制限も見つからない場合は制限なしとして扱う
                 return True, "No limit found"
@@ -115,7 +115,8 @@ class TokenUsageService:
                 db.query(func.sum(TokenUsage.effective_tokens))
                 .filter(
                     TokenUsage.user_id == user_id,
-                    TokenUsage.model_name == model_name,
+                    TokenUsage.model_id
+                    == model_id.value,  # TokenUsage.model_id is string
                     TokenUsage.timestamp >= start_time,
                 )
                 .scalar()
@@ -148,7 +149,8 @@ class TokenUsageService:
                 db.query(func.sum(TokenUsage.effective_tokens))
                 .filter(
                     TokenUsage.user_id == user_id,
-                    TokenUsage.model_name == model_name,
+                    TokenUsage.model_id
+                    == model_id.value,  # TokenUsage.model_id is string
                     TokenUsage.timestamp >= start_time,
                 )
                 .scalar()
@@ -172,14 +174,14 @@ class TokenUsageService:
         # モデルごとの集計クエリ
         query = (
             db.query(
-                TokenUsage.model_name,
+                TokenUsage.model_id,
                 func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                 func.sum(TokenUsage.completion_tokens).label("total_completion_tokens"),
                 func.sum(TokenUsage.total_tokens).label("total_tokens"),
                 func.sum(TokenUsage.effective_tokens).label("effective_tokens"),
             )
             .filter(TokenUsage.user_id == user_id, TokenUsage.timestamp >= start_time)
-            .group_by(TokenUsage.model_name)
+            .group_by(TokenUsage.model_id)
         )
 
         results = query.all()
@@ -189,7 +191,7 @@ class TokenUsageService:
         for row in results:
             stats.append(
                 TokenUsageByModel(
-                    model_name=row.model_name,
+                    model_name=row.model_id,
                     total_prompt_tokens=row.total_prompt_tokens or 0,
                     total_completion_tokens=row.total_completion_tokens or 0,
                     total_tokens=row.total_tokens or 0,

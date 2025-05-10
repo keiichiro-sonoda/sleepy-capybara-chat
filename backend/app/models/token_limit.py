@@ -1,47 +1,38 @@
 from sqlalchemy import (
     Integer,
-    String,
     Enum as SQLAlchemyEnum,
     ForeignKey,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
-import enum
-
-
-class MetricType(str, enum.Enum):
-    TOKENS = "tokens"
-    # REQUESTS = "requests" # 一旦コメントアウトまたは削除
-
-
-class PeriodUnit(str, enum.Enum):
-    MINUTE = "minute"
-    HOUR = "hour"
-    DAY = "day"
-    MONTH = "month"
+from app.schemas.enums import MetricType, PeriodUnit, AIModelId
 
 
 class TokenLimit(Base):
     __tablename__ = "token_limits"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    model_name: Mapped[str] = mapped_column(
-        String(255), index=True, nullable=False
-    )  # モデル名は必須
+    model_id: Mapped[AIModelId] = mapped_column(
+        SQLAlchemyEnum(AIModelId, name="aimodelid_enum", create_type=True),
+        index=True,
+        nullable=False,
+    )
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), index=True, nullable=False
     )  # ユーザーIDは必須
 
     metric_type: Mapped[MetricType] = mapped_column(
-        SQLAlchemyEnum(MetricType), nullable=False
+        SQLAlchemyEnum(MetricType, name="metrictype_enum", create_type=True),
+        nullable=False,
     )
     limit_value: Mapped[int] = mapped_column(
         Integer, nullable=False
     )  # 例: 1000 (トークン数やリクエスト数)
 
     period_unit: Mapped[PeriodUnit] = mapped_column(
-        SQLAlchemyEnum(PeriodUnit), nullable=False
+        SQLAlchemyEnum(PeriodUnit, name="periodunit_enum", create_type=True),
+        nullable=False,
     )  # 例: PeriodUnit.HOUR
     period_value: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1
@@ -54,7 +45,7 @@ class TokenLimit(Base):
     __table_args__ = (
         UniqueConstraint(
             "user_id",
-            "model_name",
+            "model_id",
             "period_unit",
             "period_value",
             name="_user_model_period_uc",

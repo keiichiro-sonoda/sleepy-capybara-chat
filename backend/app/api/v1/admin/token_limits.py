@@ -32,16 +32,14 @@ async def get_user_token_limits(
     return db.query(TokenLimitModel).filter(TokenLimitModel.user_id == user_id).all()
 
 
-@router.get("/models/{model_name}/token-limits", response_model=list[TokenLimit])
+@router.get("/models/{model_id}/token-limits", response_model=list[TokenLimit])
 async def get_model_token_limits(
-    model_name: str,
+    model_id: str,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin_user),
 ) -> list[TokenLimitModel]:
     """Get all token limits for a specific model."""
-    return (
-        db.query(TokenLimitModel).filter(TokenLimitModel.model_name == model_name).all()
-    )
+    return db.query(TokenLimitModel).filter(TokenLimitModel.model_id == model_id).all()
 
 
 @router.post(

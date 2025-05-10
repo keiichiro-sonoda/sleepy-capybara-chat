@@ -18,6 +18,7 @@ from app.schemas.chat import (
     MessageSchema,
     ChatResponseWithThinking,
 )
+from app.schemas.enums import AIModelId
 from app.services.chat import ChatService
 from app.services.token_usage import TokenUsageService
 
@@ -86,12 +87,12 @@ async def create_message(
 ) -> ChatResponseWithThinking | StreamingResponse:
     # thinking_modeパラメータをログ出力（レベルをINFOに上げる）
     logger.info(
-        f"💬 Message request received: model={message.model_name}, thinking_mode={message.thinking_mode}, content_preview='{message.content[:30]}...'"
+        f"💬 Message request received: model={message.model_id}, thinking_mode={message.thinking_mode}, content_preview='{message.content[:30]}...'"
     )
 
     # トークン制限チェック
     is_allowed, reason = await TokenUsageService.check_token_limit(
-        db, current_user.id, message.model_name
+        db, current_user.id, message.model_id
     )
     if not is_allowed:
         raise HTTPException(
@@ -110,9 +111,9 @@ async def create_message(
         )
 
     # ChatServiceから思考モードのサポート状況を確認
-    thinking_mode_support = ChatService.get_thinking_mode_support(message.model_name)
+    thinking_mode_support = ChatService.get_thinking_mode_support(message.model_id)
     logger.info(
-        f"🧠 Model {message.model_name} thinking mode support: {thinking_mode_support}"
+        f"🧠 Model {message.model_id} thinking mode support: {thinking_mode_support}"
     )
 
     # ユーザーメッセージの保存（モデル名を含める）
@@ -121,7 +122,7 @@ async def create_message(
         session_id=session_id,
         role="user",
         content=user_content,
-        model_name=message.model_name,
+        model_id=message.model_id,
     )
     db.add(user_message)
     db.commit()
@@ -156,7 +157,7 @@ async def create_message(
         # Cast the generator type explicitly
         chat_response_gen_uncasted = await ChatService.get_chat_response(
             formatted_messages,
-            message.model_name,
+            message.model_id,
             stream=True,
             thinking_mode=message.thinking_mode,
         )
@@ -169,7 +170,7 @@ async def create_message(
         return StreamingResponse(
             _stream_chat_response(
                 session_id,
-                message.model_name,
+                message.model_id,
                 db,
                 current_user.id,
                 message.thinking_mode,
@@ -182,7 +183,7 @@ async def create_message(
     try:
         response_data_uncasted = await ChatService.get_chat_response(
             formatted_messages,
-            message.model_name,
+            message.model_id,
             stream=False,
             thinking_mode=message.thinking_mode,
         )
@@ -196,7 +197,7 @@ async def create_message(
         if "token_usage" in response_data:
             token_usage = response_data["token_usage"]
             logger.info(
-                f"Token usage (non-streaming) - model: {message.model_name}, "
+                f"Token usage (non-streaming) - model: {message.model_id}, "
                 f"prompt: {token_usage.get('prompt_tokens', 0)}, "
                 f"completion: {token_usage.get('completion_tokens', 0)}, "
                 f"total: {token_usage.get('total_tokens', 0)}"
@@ -204,13 +205,13 @@ async def create_message(
             await TokenUsageService.record_token_usage(
                 db,
                 current_user.id,
-                message.model_name,
+                message.model_id,
                 token_usage["prompt_tokens"],
                 token_usage["completion_tokens"],
             )
         else:
             logger.warning(
-                f"No token usage information in response from {message.model_name}"
+                f"No token usage information in response from {message.model_id}"
             )
 
         # AIのレスポンスを保存
@@ -225,7 +226,7 @@ async def create_message(
             session_id=session_id,
             role="assistant",
             content=ai_response,
-            model_name=message.model_name,
+            model_id=message.model_id,
             thinking_content=thinking_content,
         )
         db.add(ai_message)
@@ -247,7 +248,7 @@ async def create_message(
 # ストリーミングレスポンスを処理する非同期ジェネレータを更新
 async def _stream_chat_response(
     session_id: int,
-    model_name: str,
+    model_id: AIModelId,
     db: Session,
     user_id: int,
     thinking_mode: bool = False,
@@ -256,12 +257,12 @@ async def _stream_chat_response(
     ) = None,
 ) -> typing.AsyncGenerator[str, None]:
     logger.info(
-        f"Starting streaming response for session_id={session_id}, model={model_name}, thinking_mode={thinking_mode}"
+        f"Starting streaming response for session_id={session_id}, model={model_id}, thinking_mode={thinking_mode}"
     )
 
     complete_response = ""
     complete_thinking = ""
-    token_usage = None
+    token_usage_obj = None
 
     yield "data: " + json.dumps({"event": "start"}) + "\n\n"
 
@@ -273,15 +274,19 @@ async def _stream_chat_response(
 
     try:
         chunk_count = 0
-        async for chunk, chunk_type, is_done, usage in chat_response_generator:
+        async for chunk, chunk_type, is_done, usage_data in chat_response_generator:
             chunk_count += 1
             logger.debug(
                 f"Chunk #{chunk_count} received: type={chunk_type}, length={len(chunk)}, is_done={is_done}"
             )
 
-            if usage and isinstance(usage, dict) and "thinking_content" in usage:
-                if usage["thinking_content"] is not None:
-                    complete_thinking = usage["thinking_content"]
+            if (
+                usage_data
+                and isinstance(usage_data, dict)
+                and "thinking_content" in usage_data
+            ):
+                if usage_data["thinking_content"] is not None:
+                    complete_thinking = usage_data["thinking_content"]
                     logger.debug(
                         f"Updated complete_thinking from usage: {len(complete_thinking)} chars"
                     )
@@ -302,43 +307,41 @@ async def _stream_chat_response(
                 logger.info(
                     f"Processing 'done' event from provider. Final accumulated response length: {len(complete_response)}, thinking length: {len(complete_thinking)}"
                 )
-                if usage:
-                    prompt_tokens = usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("completion_tokens", 0)
-                    total_tokens = usage.get(
+                token_usage_dict_for_json = None
+                if usage_data:
+                    prompt_tokens = usage_data.get("prompt_tokens", 0)
+                    completion_tokens = usage_data.get("completion_tokens", 0)
+                    total_tokens = usage_data.get(
                         "total_tokens", prompt_tokens + completion_tokens
                     )
-
                     logger.info(
-                        f"Token usage (streaming) - model: {model_name}, "
+                        f"Token usage (streaming) - model: {model_id}, "
                         f"prompt: {prompt_tokens}, completion: {completion_tokens}, total: {total_tokens}"
                     )
-
-                    token_usage = await TokenUsageService.record_token_usage(
+                    token_usage_obj = await TokenUsageService.record_token_usage(
                         db,
                         user_id,
-                        model_name,
+                        model_id,
                         prompt_tokens,
                         completion_tokens,
                     )
-                    token_usage_dict = {
-                        "id": token_usage.id,
-                        "user_id": token_usage.user_id,
-                        "model_name": token_usage.model_name,
-                        "prompt_tokens": token_usage.prompt_tokens,
-                        "completion_tokens": token_usage.completion_tokens,
-                        "total_tokens": token_usage.total_tokens,
+                    token_usage_dict_for_json = {
+                        "id": token_usage_obj.id,
+                        "user_id": token_usage_obj.user_id,
+                        "model_id": token_usage_obj.model_id,
+                        "prompt_tokens": token_usage_obj.prompt_tokens,
+                        "completion_tokens": token_usage_obj.completion_tokens,
+                        "total_tokens": token_usage_obj.total_tokens,
                         "timestamp": (
-                            str(token_usage.timestamp)
-                            if token_usage.timestamp
+                            str(token_usage_obj.timestamp)
+                            if token_usage_obj.timestamp
                             else None
                         ),
                     }
                 else:
                     logger.warning(
-                        f"No token usage information in final streaming chunk from {model_name}"
+                        f"No token usage information in final streaming chunk from {model_id}"
                     )
-                    token_usage_dict = None
 
                 final_answer_content_to_save = complete_response.strip()
                 final_thinking_content_to_save = (
@@ -357,32 +360,67 @@ async def _stream_chat_response(
 
                 if not final_answer_content_to_save:
                     logger.warning(
-                        f"Empty final answer detected for session_id={session_id}, model={model_name}"
+                        f"Empty final answer detected for session_id={session_id}, model={model_id}"
                     )
                     final_answer_content_to_save = "(応答なし)"
 
-                ai_message = Message(
+                # データベースに最終メッセージを保存
+                db_message = Message(
                     session_id=session_id,
                     role="assistant",
                     content=final_answer_content_to_save,
-                    model_name=model_name,
+                    model_id=model_id,
                     thinking_content=final_thinking_content_to_save,
                 )
-                db.add(ai_message)
+                db.add(db_message)
                 db.commit()
-                logger.info(f"AI response saved to DB: message_id={ai_message.id}")
+                db.refresh(db_message)
+                logger.info(f"AI response saved to DB: message_id={db_message.id}")
 
+                # 最終的なメッセージ情報をクライアントに送信
+                # created_at が存在することを確認
+                created_at_iso = (
+                    db_message.created_at.isoformat() if db_message.created_at else None
+                )
+                # Ensure model_id is a string for JSON serialization
+                model_id_str_for_json = (
+                    db_message.model_id.value
+                    if hasattr(db_message.model_id, "value")
+                    else db_message.model_id
+                )
+                message_data_for_json = {
+                    "id": db_message.id,
+                    "session_id": db_message.session_id,
+                    "role": db_message.role,
+                    "content": db_message.content,
+                    "model_id": model_id_str_for_json,
+                    "created_at": created_at_iso,
+                    "thinking_content": db_message.thinking_content,
+                    "token_usage": token_usage_dict_for_json,
+                }
+                # Send the final message data with type: "message"
+                # This event might be used by the frontend to update the final message content
+                # before the stream is considered fully 'done'.
                 yield "data: " + json.dumps(
                     {
-                        "event": "done",
-                        "content": final_answer_content_to_save,
-                        "session_id": session_id,
-                        "model_name": model_name,
-                        "token_usage": token_usage_dict,
-                        "thinking_content": final_thinking_content_to_save,
+                        "type": "message",
+                        "data": message_data_for_json,
                     }
                 ) + "\n\n"
 
+                # Send the 'event: done' that the frontend expects for completion
+                done_event_data = {
+                    "event": "done",  # Frontend expects this event type
+                    "content": message_data_for_json.get("content"),
+                    "model_name": message_data_for_json.get(
+                        "model_id"
+                    ),  # Frontend expects model_name
+                    "thinking_content": message_data_for_json.get("thinking_content"),
+                    "token_usage": message_data_for_json.get("token_usage"),
+                }
+                yield "data: " + json.dumps(done_event_data) + "\n\n"
+
+                logger.info(f"Sent 'event: done' for session_id={session_id}")
                 logger.info(f"Streaming response completed for session_id={session_id}")
                 break
             else:

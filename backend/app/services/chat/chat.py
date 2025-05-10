@@ -6,6 +6,7 @@ from app.services.chat.base import ModelProvider
 from app.services.chat.ollama import OllamaProvider
 from app.services.chat.openai import OpenAIProvider
 from app.schemas.chat import AVAILABLE_MODELS
+from app.schemas.enums import AIModelId
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class ChatService:
     @staticmethod
     def get_provider_from_model(model_name: str) -> Tuple[str, str]:
         """モデル名からプロバイダとモデルを判定"""
-        # OpenAIプロバイダを使用する条件
+        # This method expects a string and uses string methods like startswith
         if (
             model_name.startswith("gpt-")
             or model_name.startswith("openai:")
@@ -44,7 +45,7 @@ class ChatService:
             or "gpt4" in model_name.lower().replace("-", "").replace(".", "")
         ):
             if model_name.startswith("openai:"):
-                model_name = model_name[7:]  # "openai:" プレフィックスを削除
+                model_name = model_name[7:]
             return "openai", model_name
         else:
             return "ollama", model_name
@@ -74,37 +75,34 @@ class ChatService:
     @staticmethod
     async def get_chat_response(
         messages: list[dict[str, str]],
-        model_name: str,
+        model_name: AIModelId,  # Changed type hint to AIModelId
         stream: bool = False,
         thinking_mode: bool = False,
     ) -> dict[str, Any] | AsyncGenerator[tuple[str, str, bool, dict[Any, Any]], None]:
         """適切なプロバイダを使用してチャットレスポンスを取得"""
-        provider_name, actual_model = ChatService.get_provider_from_model(model_name)
+        provider_name, actual_model = ChatService.get_provider_from_model(
+            model_name.value
+        )  # Pass .value
         logger.debug(
             f"Using provider: {provider_name}, model: {actual_model}, stream: {stream}, thinking_mode: {thinking_mode}"
         )
 
-        # 思考モードのサポート状況を確認
-        thinking_mode_support = ChatService.get_thinking_mode_support(model_name)
+        thinking_mode_support = ChatService.get_thinking_mode_support(
+            model_name
+        )  # Pass Enum
 
-        # モデルが思考モードをサポートしていない場合は無効化
         if thinking_mode_support == "none":
             thinking_mode = False
-        # モデルが思考モードを強制する場合は有効化
         elif thinking_mode_support == "forced":
             thinking_mode = True
-        # それ以外（"optional"）の場合は、パラメータ指定通りの値を使用
 
         provider = ProviderFactory.get_provider(provider_name)
 
-        # プロバイダーのchat_completionを呼び出す
         if thinking_mode_support == "none":
-            # 思考モードをサポートしないモデルの場合、thinking_mode引数を渡さない
             response = await provider.chat_completion(
                 messages, actual_model, stream=stream
             )
         else:
-            # 思考モードをサポートするモデルの場合、thinking_mode引数を渡す
             response = await provider.chat_completion(
                 messages, actual_model, stream=stream, thinking_mode=thinking_mode
             )
@@ -117,9 +115,11 @@ class ChatService:
         return response
 
     @staticmethod
-    def get_thinking_mode_support(model_name: str) -> str:
+    def get_thinking_mode_support(
+        model_name: AIModelId,
+    ) -> str:  # Changed type hint to AIModelId
         """モデルの思考モードサポート状況を取得"""
         for model in AVAILABLE_MODELS:
-            if model.id == model_name:
+            if model.id == model_name:  # Compare Enum with Enum
                 return model.thinking_mode
-        return "none"  # デフォルトは思考モードなし
+        return "none"

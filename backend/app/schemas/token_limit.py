@@ -1,9 +1,9 @@
 from pydantic import BaseModel, ConfigDict
-from app.models.token_limit import MetricType, PeriodUnit
+from app.schemas.enums import MetricType, PeriodUnit, AIModelId
 
 
 class TokenLimitBase(BaseModel):
-    model_name: str
+    model_id: AIModelId
     user_id: int
     metric_type: MetricType = MetricType.TOKENS
     limit_value: int
@@ -16,7 +16,7 @@ class TokenLimitCreate(TokenLimitBase):
 
 
 class TokenLimitUpdate(BaseModel):
-    model_name: str | None = None
+    model_id: AIModelId | None = None
     user_id: int | None = None
     metric_type: MetricType | None = None
     limit_value: int | None = None

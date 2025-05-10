@@ -1,7 +1,16 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    Enum as SQLAlchemyEnum,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import Base
+from app.schemas.enums import AIModelId
 
 
 class ChatSession(Base):
@@ -26,7 +35,10 @@ class Message(Base):
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
     thinking_content = Column(Text, nullable=True)  # 思考過程を保存するフィールド
-    model_name = Column(String, nullable=False)  # 使用されたモデル名（必須）
+    model_id: Column[AIModelId] = Column(
+        SQLAlchemyEnum(AIModelId, name="aimodelid_enum", create_type=False),
+        nullable=False,
+    )  # Renamed from model_name, 使用されたモデル名（必須）
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

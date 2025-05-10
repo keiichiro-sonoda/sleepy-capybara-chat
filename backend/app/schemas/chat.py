@@ -1,11 +1,11 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
-from app.models.token_limit import PeriodUnit
+from app.schemas.enums import PeriodUnit, AIModelId
 
 
 # AIモデルの定義用クラス
 class AIModel(BaseModel):
-    id: str
+    id: AIModelId
     name: str
     provider: str
     thinking_mode: str = "none"  # "none", "optional", "forced"
@@ -30,7 +30,7 @@ class AIModel(BaseModel):
 # 利用可能なモデルのリスト (AIModelインスタンスのリストとして定義)
 AVAILABLE_MODELS: list[AIModel] = [
     AIModel(
-        id="qwen3:8b",
+        id=AIModelId.QWEN3_8B,
         name="Qwen3 8B",
         provider="ollama",
         thinking_mode="optional",
@@ -40,7 +40,7 @@ AVAILABLE_MODELS: list[AIModel] = [
         default_limit_period_value=1,
     ),
     AIModel(
-        id="gpt-4.1-nano",
+        id=AIModelId.GPT_4_1_NANO,
         name="GPT-4.1 Nano",
         provider="openai",
         thinking_mode="none",
@@ -53,7 +53,10 @@ AVAILABLE_MODELS: list[AIModel] = [
 ]
 
 # デフォルトモデルを最初のモデルに設定
-DEFAULT_MODEL: str = AVAILABLE_MODELS[0].id if AVAILABLE_MODELS else "qwen3"
+DEFAULT_MODEL_ID: AIModelId = (
+    AVAILABLE_MODELS[0].id if AVAILABLE_MODELS else AIModelId.QWEN3_8B
+)
+DEFAULT_MODEL: str = DEFAULT_MODEL_ID.value
 
 
 class MessageBase(BaseModel):
@@ -64,7 +67,7 @@ class MessageBase(BaseModel):
 
 class MessageCreate(MessageBase):
     stream: bool = False
-    model_name: str = DEFAULT_MODEL
+    model_id: AIModelId = DEFAULT_MODEL_ID
     thinking_mode: bool = False  # 思考モードのオン/オフ
 
 
@@ -73,7 +76,7 @@ class Message(MessageBase):
     session_id: int
     created_at: datetime
     updated_at: datetime | None = None
-    model_name: str  # 使用されたモデル名（必須）
+    model_id: AIModelId  # Changed from str, Renamed from model_name, 使用されたモデル名（必須）
     model_config = ConfigDict(from_attributes=True)
 
 
