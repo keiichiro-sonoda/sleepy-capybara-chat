@@ -50,6 +50,19 @@ export const authPost = async <T>(url: string, data?: any, config?: AxiosRequest
   return response.data;
 };
 
+// 認証が必要なPUTリクエスト
+export const authPut = async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    throw new Error('認証が必要です');
+  }
+
+  const client = createAuthClient(token);
+  const response = await client.put<T>(url, data, config);
+  return response.data;
+};
+
 // 認証が必要なDELETEリクエスト
 export const authDelete = async <T>(url: string, config?: AxiosRequestConfig): Promise<T | void> => {
   const token = localStorage.getItem('token');
@@ -139,15 +152,15 @@ export const getDefaultModel = async (): Promise<string> => {
   return response.data;
 };
 
-// APIからモデル情報を取得する前の一時的なデフォルトモデル
+// APIからモデル情報を取得する前の一時的なデフォルトモデルID
 // これはAPIリクエスト中のフォールバックとしてのみ使用
-const TEMP_DEFAULT_MODEL = "qwen3";
+const TEMP_DEFAULT_MODEL_ID = "qwen3";
 
 // 新しいチャットセッションを作成
-export const createChatSession = async (modelName?: string): Promise<ChatSession> => {
-  const modelToUse = modelName || TEMP_DEFAULT_MODEL;
+export const createChatSession = async (modelId?: string): Promise<ChatSession> => {
+  const modelToUse = modelId || TEMP_DEFAULT_MODEL_ID;
   return await authPost<ChatSession>('/v1/chat/sessions', {
-    model_name: modelToUse
+    model_id: modelToUse
   });
 };
 
@@ -165,14 +178,14 @@ export const getChatMessages = async (sessionId: number): Promise<ChatMessage[]>
 export const sendChatMessage = async (
   sessionId: number,
   content: string,
-  modelName?: string,
+  modelId?: string,
   thinking_mode?: boolean
 ): Promise<ChatResponse> => {
   return await authPost<ChatResponse>(`/v1/chat/sessions/${sessionId}/messages`, {
     content,
     role: "user",
     stream: false,
-    model_name: modelName,
+    model_id: modelId,
     thinking_mode: thinking_mode ?? false
   });
 };
@@ -182,9 +195,9 @@ export const sendChatMessageStreaming = async (
   sessionId: number,
   content: string,
   onChunk: (chunk: string, type: 'thinking' | 'answer') => void,
-  onComplete: (fullResponse: string, modelName?: string, thinkingContent?: string | null) => void,
+  onComplete: (fullResponse: string, modelId?: string, thinkingContent?: string | null) => void,
   onError: (error: string) => void,
-  modelName?: string,
+  modelId?: string,
   thinking_mode?: boolean
 ): Promise<void> => {
   const token = localStorage.getItem('token');
@@ -204,13 +217,22 @@ export const sendChatMessageStreaming = async (
         content,
         role: "user",
         stream: true,
-        model_name: modelName,
+        model_id: modelId,
         thinking_mode: thinking_mode ?? false
       })
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      let errorBody = `API error: ${response.status}`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson && errorJson.detail) {
+          errorBody += ` - ${errorJson.detail}`;
+        }
+      } catch (e) {
+        // JSONパース失敗時は何もしない
+      }
+      throw new Error(errorBody);
     }
 
     const reader = response.body?.getReader();
@@ -222,7 +244,7 @@ export const sendChatMessageStreaming = async (
     let buffer = '';
     let completedResponse = "";
     let completedThinkingContent: string | null = null;
-    let responseModelName: string | undefined = undefined;
+    let responseModelId: string | undefined = undefined;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -244,8 +266,8 @@ export const sendChatMessageStreaming = async (
           } else if (eventData.event === 'done') {
             completedResponse = eventData.content ?? "";
             completedThinkingContent = eventData.thinking_content ?? null;
-            responseModelName = eventData.model_name ?? modelName;
-            onComplete(completedResponse, responseModelName, completedThinkingContent);
+            responseModelId = eventData.model_name ?? modelId;
+            onComplete(completedResponse, responseModelId, completedThinkingContent);
             return;
           } else if (eventData.event === 'error') {
             onError(eventData.message || 'Unknown error');
