@@ -282,6 +282,7 @@ function ChatContent() {
               }));
             },
             async (fullResponse: string, responseModelName?: string, finalThinkingContent?: string | null) => {
+              console.log('Streaming onComplete triggered. Full response length:', fullResponse.length, 'Model:', responseModelName, 'Thinking content length:', finalThinkingContent?.length);
               setIsThinkingDetailsOpen(false);
               setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId

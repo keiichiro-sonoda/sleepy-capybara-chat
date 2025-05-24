@@ -6,6 +6,7 @@ import { fetchCurrentUser, getApiUrl } from '@/utils/api';
 export type User = {
   email: string;
   is_verified: boolean;
+  is_admin: boolean;
 };
 
 export type AuthState = {

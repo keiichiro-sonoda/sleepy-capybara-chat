@@ -5,6 +5,8 @@ import { AIModel } from '@/utils/constants';
 import { getAvailableModels } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 type ChatHeaderProps = {
   user: ReturnType<typeof useAuth>['user'];
@@ -107,18 +109,32 @@ const ChatHeader = ({
           {user && (
             <div className="flex items-center space-x-2">
               <span className="mr-2 text-sm hidden md:inline">{user.email}</span>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors cursor-pointer"
                 onClick={() => router.push('/profile')}
-                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
               >
                 プロフィール
-              </button>
-              <button
+              </Button>
+              {user.is_admin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors cursor-pointer"
+                  onClick={() => router.push('/token-management')}
+                >
+                  トークン管理
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors cursor-pointer"
                 onClick={onLogout}
-                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
               >
                 ログアウト
-              </button>
+              </Button>
             </div>
           )}
         </div>
