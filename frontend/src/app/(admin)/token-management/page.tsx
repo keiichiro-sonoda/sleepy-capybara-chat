@@ -91,8 +91,9 @@ export default function TokenManagementPage() {
           ...columnDef,
           cell: ({ row }: { row: { original: UserWithTokenLimits } }) => (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
+              className="text-sm bg-white hover:bg-gray-100 px-3 py-1 rounded transition-colors cursor-pointer border border-gray-300"
               onClick={() => handleOpenEditDialog(row.original)} // ここでハンドラを呼び出す
             >
               Edit Limits
@@ -143,7 +144,17 @@ export default function TokenManagementPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-6">トークン制限管理</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">トークン制限管理</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-sm bg-white hover:bg-gray-100 px-3 py-1 rounded transition-colors cursor-pointer border border-gray-300"
+          onClick={() => router.push('/chat')}
+        >
+          チャットに戻る
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
