@@ -1,14 +1,13 @@
 import pytest
+import pytest_asyncio
 import sys
 import os
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.db.session import get_db, Base
-from app.main import app
+from app.models.base import Base
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
@@ -31,19 +30,3 @@ def db():
     session.close()
     transaction.rollback()
     connection.close()
-
-
-@pytest.fixture
-def client(db):
-    """Test client with DB session override."""
-
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides = {}
