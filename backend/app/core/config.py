@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Ollama設定
     OLLAMA_API_BASE_URL: str = "http://ollama:11434"
-    
+
     # OpenAI設定
     OPENAI_API_KEY: str = ""
     OPENAI_ORGANIZATION_ID: str = ""

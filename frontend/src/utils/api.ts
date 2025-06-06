@@ -4,7 +4,10 @@ import { AIModel } from './constants';
 
 // APIのベースURL
 export const getApiUrl = (): string => {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  // console.log('DEBUG: getApiUrl() returning:', apiUrl);
+  // console.log('DEBUG: process.env.NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+  return apiUrl;
 };
 
 // 認証付きのAPIクライアントを作成
@@ -142,7 +145,11 @@ export type ChatMessage = {
 
 // 利用可能なAIモデル一覧を取得
 export const getAvailableModels = async (): Promise<AIModel[]> => {
-  const response = await axios.get<AIModel[]>(`${getApiUrl()}/v1/models`);
+  const baseUrl = getApiUrl();
+  const fullUrl = `${baseUrl}/v1/models/`;
+  // console.log(`DEBUG: getAvailableModels - baseUrl: ${baseUrl}`);
+  // console.log(`DEBUG: getAvailableModels - fullUrl: ${fullUrl}`);
+  const response = await axios.get<AIModel[]>(fullUrl);
   return response.data;
 };
 
