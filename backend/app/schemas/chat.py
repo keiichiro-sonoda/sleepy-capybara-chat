@@ -111,5 +111,6 @@ class ChatResponseWithThinking(ChatResponse):
 class MessageSchema(MessageBase):
     id: int
     created_at: datetime
+    model_id: AIModelId  # モデルIDを追加
 
     model_config = ConfigDict(from_attributes=True)

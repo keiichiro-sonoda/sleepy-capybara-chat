@@ -123,8 +123,8 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
                     : 'bg-gray-200 text-gray-800 rounded-bl-none'
                     } p-4`}
                 >
-                  {message.role === 'assistant' && message.modelName && !message.isStreaming && (
-                    <div className="text-xs font-medium mb-1 text-gray-600 bg-gray-100 px-2 py-0.5 rounded inline-block">
+                  {message.role === 'assistant' && (
+                    <div className="text-xs font-medium mb-2 text-gray-600 bg-gray-100 px-2 py-0.5 rounded inline-block">
                       {getModelDisplayName(message.modelName)}
                     </div>
                   )}

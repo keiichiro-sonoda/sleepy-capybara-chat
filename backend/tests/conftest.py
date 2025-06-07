@@ -1,14 +1,18 @@
 import pytest
+import pytest_asyncio
 import sys
 import os
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from fastapi.testclient import TestClient
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.db.session import get_db, Base
+from app.models.base import Base
+from app.models.user import User
 from app.main import app
+from app.db.session import get_db
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
@@ -35,15 +39,46 @@ def db():
 
 @pytest.fixture
 def client(db):
-    """Test client with DB session override."""
+    """FastAPI test client."""
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
+    def get_test_db():
+        return db
 
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides = {}
+    app.dependency_overrides[get_db] = get_test_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unverified_user(db):
+    """Create an unverified user for testing."""
+    user = User(
+        email="unverified@example.com",
+        username="unverified_user",
+        hashed_password="fake_hashed_password",
+        is_verified=False,
+        verification_token="fake_token",
+        verification_token_expires_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def verified_user(db):
+    """Create a verified user for testing."""
+    user = User(
+        email="verified@example.com",
+        username="verified_user",
+        hashed_password="fake_hashed_password",
+        is_verified=True,
+        verification_token=None,
+        verification_token_expires_at=None,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user

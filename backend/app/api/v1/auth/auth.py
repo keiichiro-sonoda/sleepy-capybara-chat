@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,37 @@ async def register(user: UserCreate, db: Session = Depends(get_db)) -> User:
     # 既存ユーザーチェック
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-        )
+        if db_user.is_verified:
+            # 既に確認済みのユーザーの場合はエラー
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+        else:
+            # 未確認のユーザーの場合は、確認メールを再送信
+            try:
+                # パスワードも更新する（ユーザーが忘れている可能性があるため）
+                db_user.hashed_password = get_password_hash(user.password)
+
+                # 新しい確認トークンを生成
+                token = set_verification_token(db, db_user)
+
+                # 確認メール送信
+                await send_verification_email(user.email, token)
+
+                db.commit()
+
+                return db_user
+
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"User registration failed: {str(e)}",
+                )
 
     try:
+        # 新規ユーザー作成
         # トランザクション開始
         # ユーザー作成（is_verified=False）
         hashed_password = get_password_hash(user.password)
@@ -117,13 +144,26 @@ async def resend_confirmation(
     Returns a success message regardless of whether the email exists for security reasons.
     """
     user = db.query(User).filter(User.email == request.email).first()
-    
+
     if user and not user.is_verified:
+        # レート制限チェック：最後のトークン生成から60秒以内は再送信を拒否
+        if user.verification_token_expires_at:
+            # verification_token_expires_atは24時間後なので、23時間前（1時間前のつもり）をチェック
+            # 実際には最後のトークン生成時刻を別途保存するか、より短い間隔でチェックする
+            time_since_last_token = datetime.now(timezone.utc) - (
+                user.verification_token_expires_at - timedelta(hours=24)
+            )
+            if time_since_last_token < timedelta(minutes=1):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Please wait at least 1 minute before requesting another confirmation email.",
+                )
+
         try:
             token = set_verification_token(db, user)
-            
+
             await send_verification_email(user.email, token)
-            
+
         except Exception as e:
             db.rollback()
             logger.error(f"Failed to resend confirmation email: {str(e)}")
@@ -131,8 +171,10 @@ async def resend_confirmation(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to resend confirmation email",
             )
-    
-    return {"message": "If your email is registered and not verified, a new confirmation email has been sent."}
+
+    return {
+        "message": "If your email is registered and not verified, a new confirmation email has been sent."
+    }
 
 
 # パスワードリセット関連エンドポイントも追加
