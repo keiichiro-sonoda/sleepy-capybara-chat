@@ -29,7 +29,7 @@ class MessageCreate(MessageBase):
 FastAPIの`StreamingResponse`を使用して、Server-Sent Events (SSE) 形式でデータをストリーミングします：
 
 ```python
-# backend/app/api/chat/chat.py
+# backend/app/api/v1/chat/chat.py
 from fastapi.responses import StreamingResponse
 import json
 
