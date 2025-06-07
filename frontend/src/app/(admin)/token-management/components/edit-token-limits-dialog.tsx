@@ -51,12 +51,18 @@ export function EditTokenLimitsDialog({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
 
+  // 元の制限データを保持（リセット用）
+  const [originalLimits, setOriginalLimits] = useState<Partial<TokenLimit>[]>([]);
+
   useEffect(() => {
     if (user?.token_limits) {
       // 既存の制限をディープコピーして編集用に設定
-      setCurrentLimits(JSON.parse(JSON.stringify(user.token_limits)));
+      const limits = JSON.parse(JSON.stringify(user.token_limits));
+      setCurrentLimits(limits);
+      setOriginalLimits(limits); // 元のデータも保存
     } else {
       setCurrentLimits([]);
+      setOriginalLimits([]);
     }
   }, [user]);
 
@@ -78,14 +84,25 @@ export function EditTokenLimitsDialog({
     fetchModels();
   }, [isOpen, availableModels.length, modelsLoading]); // isOpen, modelsLoading, availableModels.length を依存配列に追加
 
-  if (!user) return null; // ユーザーが選択されていない場合は何も表示しない
+  if (!user) return null;
+
+  // モーダルが閉じる時の処理
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      // モーダルを閉じる時は元のデータにリセット
+      setCurrentLimits(JSON.parse(JSON.stringify(originalLimits)));
+      setError(null);
+    }
+    onOpenChange(open);
+  }; // ユーザーが選択されていない場合は何も表示しない
 
   const handleAddNewLimit = () => {
     // 新しい空の制限オブジェクトを追加（デフォルト値などを設定）
     // IDはサーバー側で採番されるのでここでは不要
     const newLimitTemplate: Partial<TokenLimit> = {
       user_id: user.id,
-      model_name: "", // デフォルトのモデル名や空文字
+      model_id: "", // デフォルトのモデルIDや空文字
+      model_name: "", // 表示用
       metric_type: MetricType.TOKENS,
       limit_value: 0,
       period_unit: PeriodUnit.MONTH,
@@ -103,12 +120,43 @@ export function EditTokenLimitsDialog({
     const limitToUpdate = { ...updatedLimits[index] } as Partial<TokenLimit>; // 型アサーション
 
     if (field === 'limit_value' || field === 'period_value') {
-      (limitToUpdate as any)[field] = parseInt(value as string, 10) || 0;
+      // 空文字列の場合は0として扱う（表示は空文字列のまま）
+      const stringValue = value as string;
+      if (stringValue === '') {
+        (limitToUpdate as any)[field] = '';
+      } else {
+        const numValue = parseInt(stringValue, 10);
+        (limitToUpdate as any)[field] = isNaN(numValue) ? 0 : numValue;
+      }
+    } else if (field === 'model_name') {
+      // モデル名が変更された場合、対応するmodel_idのみ設定
+      const selectedModel = availableModels.find(m => m.name === value);
+      if (selectedModel) {
+        limitToUpdate.model_id = selectedModel.id; // これはAIModelIdのenum値
+        // model_nameはAPI送信時に除外されるため、ここでは設定しない
+      }
     } else {
       (limitToUpdate as any)[field] = value;
     }
     updatedLimits[index] = limitToUpdate;
     setCurrentLimits(updatedLimits);
+  };
+
+  // 数値フィールドのフォーカスが外れた時の処理
+  const handleNumberBlur = (
+    index: number,
+    field: 'limit_value' | 'period_value'
+  ) => {
+    const updatedLimits = [...currentLimits];
+    const limitToUpdate = { ...updatedLimits[index] } as Partial<TokenLimit>;
+
+    // 空文字列の場合は適切なデフォルト値を設定
+    const currentValue = (limitToUpdate as any)[field];
+    if (currentValue === '' || currentValue === null || currentValue === undefined) {
+      (limitToUpdate as any)[field] = field === 'period_value' ? 1 : 0;
+      updatedLimits[index] = limitToUpdate;
+      setCurrentLimits(updatedLimits);
+    }
   };
 
   const handleRemoveLimit = async (index: number, limitId?: number) => {
@@ -144,6 +192,7 @@ export function EditTokenLimitsDialog({
         }
       }
       onLimitsUpdate(); // 親コンポーネントに更新を通知
+      setOriginalLimits(JSON.parse(JSON.stringify(currentLimits))); // 保存後は現在の状態を元データとして設定
       onOpenChange(false); // モーダルを閉じる
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save limits");
@@ -153,14 +202,14 @@ export function EditTokenLimitsDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Edit Token Limits for {user.email}</DialogTitle>
           <DialogDescription>
             Manage token usage limits for this user. Click save when you're done.
-            {modelsLoading && <p className="text-xs text-muted-foreground mt-1">Loading available models...</p>}
-            {modelsError && <p className="text-xs text-red-500 mt-1">Error loading models: {modelsError}</p>}
+            {modelsLoading && <span className="text-xs text-muted-foreground mt-1 block">Loading available models...</span>}
+            {modelsError && <span className="text-xs text-red-500 mt-1 block">Error loading models: {modelsError}</span>}
           </DialogDescription>
         </DialogHeader>
 
@@ -198,8 +247,9 @@ export function EditTokenLimitsDialog({
                   <Input
                     id={`limit_value-${index}`}
                     type="number"
-                    value={limit.limit_value || 0}
+                    value={typeof limit.limit_value === 'string' && limit.limit_value === '' ? '' : (limit.limit_value || 0)}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLimitChange(index, 'limit_value', e.target.value)}
+                    onBlur={() => handleNumberBlur(index, 'limit_value')}
                     className="mt-1"
                   />
                 </div>
@@ -240,8 +290,9 @@ export function EditTokenLimitsDialog({
                   <Input
                     id={`period_value-${index}`}
                     type="number"
-                    value={limit.period_value || 1}
+                    value={typeof limit.period_value === 'string' && limit.period_value === '' ? '' : (limit.period_value || 1)}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLimitChange(index, 'period_value', e.target.value)}
+                    onBlur={() => handleNumberBlur(index, 'period_value')}
                     className="mt-1"
                   />
                 </div>

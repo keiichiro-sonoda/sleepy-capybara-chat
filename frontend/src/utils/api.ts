@@ -132,9 +132,33 @@ export type TokenUsageByModel = {
   total_tokens: number;
 };
 
+// トークン制限の詳細情報の型定義
+export type TokenLimitSummary = {
+  model_id: string;
+  model_name: string;
+  limit_value: number;
+  period_unit: string;
+  period_value: number;
+  current_usage: number;
+  remaining: number;
+  usage_percentage: number;
+  is_custom_limit: boolean;
+  period_description: string;
+};
+
+export type TokenLimitsSummaryResponse = {
+  limits: TokenLimitSummary[];
+  total_models: number;
+};
+
 // モデルごとのトークン使用量を取得
 export const fetchTokenUsageByModel = async (days: number = 30): Promise<TokenUsageByModel[]> => {
   return await authGet<TokenUsageByModel[]>(`/v1/users/me/token-usage/by-model?days=${days}`);
+};
+
+// 自分のトークン制限の詳細を取得
+export const fetchMyTokenLimitsSummary = async (): Promise<TokenLimitsSummaryResponse> => {
+  return await authGet<TokenLimitsSummaryResponse>('/v1/users/me/token-limits-summary');
 };
 
 // チャットセッション関連の型定義

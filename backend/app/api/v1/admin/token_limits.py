@@ -6,8 +6,13 @@ from app.core.security import get_current_admin_user
 from app.db.session import get_db
 from app.models.user import User
 from app.models.token_limit import TokenLimit as TokenLimitModel
-from app.schemas.token_limit import TokenLimit, TokenLimitCreate, TokenLimitUpdate
+from app.schemas.token_limit import (
+    TokenLimit,
+    TokenLimitCreate,
+    TokenLimitUpdate,
+)
 from app.schemas.user import UserWithTokenLimits
+from app.schemas.chat import AVAILABLE_MODELS
 
 router = APIRouter()
 
@@ -19,6 +24,17 @@ async def get_users_with_token_limits_summary(
 ) -> list[User]:
     """Get all users with their token limits summary."""
     users = db.query(User).options(selectinload(User.token_limits)).all()
+
+    # 利用可能なモデルを辞書にマッピング
+    available_models = {model.id: model for model in AVAILABLE_MODELS}
+
+    # 各ユーザーのトークン制限にmodel_nameを追加
+    for user in users:
+        for limit in user.token_limits:
+            model = available_models.get(limit.model_id)
+            # limitオブジェクトにmodel_name属性を動的に追加
+            setattr(limit, "model_name", model.name if model else limit.model_id.value)
+
     return users
 
 

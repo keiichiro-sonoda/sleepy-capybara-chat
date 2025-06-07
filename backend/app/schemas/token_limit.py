@@ -28,3 +28,9 @@ class TokenLimit(TokenLimitBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TokenLimitWithModelName(TokenLimit):
+    model_name: str
+
+    model_config = ConfigDict(from_attributes=True)
