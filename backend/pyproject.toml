@@ -8,7 +8,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.13"
+python = "^3.12"
 fastapi = "^0.109.0"
 uvicorn = "^0.27.0"
 sqlalchemy = "^2.0.25"
@@ -35,6 +35,8 @@ mypy = "^1.15.0"
 types-python-jose = "^3.4.0.20250224"
 types-passlib = "^1.7.7.20250401"
 sqlalchemy-utils = "^0.41.2"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^6.1.1"
 
 [tool.mypy]
 python_version = "3.13"
@@ -52,4 +54,4 @@ warn_unreachable = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api" 
+build-backend = "poetry.core.masonry.api"  
