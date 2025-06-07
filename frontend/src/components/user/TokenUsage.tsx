@@ -6,7 +6,7 @@ import { fetchTokenUsageByModel, TokenUsageByModel, fetchMyTokenLimitsSummary, T
 // Shadcn UI components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Info } from "lucide-react";
 
 type TimeRange = '7' | '30' | '90'
 
@@ -30,6 +30,23 @@ const Alert = ({ children, className }: { children: React.ReactNode; className?:
 const AlertDescription = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <div className={`text-sm ${className || ''}`}>
     {children}
+  </div>
+)
+
+// CSS-onlyツールチップコンポーネント
+const InfoTooltip = ({ content }: { content: string }) => (
+  <div className="relative inline-block group">
+    <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help ml-1" />
+    {/* デスクトップ用: 中央配置 */}
+    <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-80 max-w-md">
+      <div className="text-left leading-relaxed">{content}</div>
+      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+    </div>
+    {/* モバイル用: 右寄せで画面内に収める */}
+    <div className="sm:hidden absolute bottom-full right-0 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-72 max-w-[85vw]">
+      <div className="text-left leading-relaxed">{content}</div>
+      <div className="absolute top-full right-4 border-4 border-transparent border-t-gray-900"></div>
+    </div>
   </div>
 )
 
@@ -133,6 +150,7 @@ export default function TokenUsage() {
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
               トークン制限の状況
+              <InfoTooltip content="制限計算では、レスポンストークンがプロンプトトークンよりも重み付けされて計算される場合があります。モデルによって異なる比率で実質トークン数が算出されます。" />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -155,13 +173,14 @@ export default function TokenUsage() {
 
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span>
+                      <span className="flex items-center">
                         {formatNumber(limit.current_usage)} / {formatNumber(limit.limit_value)} トークン
+                        <InfoTooltip content="この数値は制限計算用の実質トークン数です。レスポンストークンの重み付けが含まれている場合があります。" />
                       </span>
                       <span className={`font-medium ${warningLevel === 'critical' ? 'text-red-600' :
-                          warningLevel === 'warning' ? 'text-orange-600' :
-                            warningLevel === 'caution' ? 'text-yellow-600' :
-                              'text-green-600'
+                        warningLevel === 'warning' ? 'text-orange-600' :
+                          warningLevel === 'caution' ? 'text-yellow-600' :
+                            'text-green-600'
                         }`}>
                         {limit.usage_percentage}%
                       </span>
@@ -200,7 +219,10 @@ export default function TokenUsage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>トークン使用量</CardTitle>
+            <CardTitle className="flex items-center">
+              トークン使用量
+              <InfoTooltip content="ここに表示される数値は実際に送受信されたトークンの生の数値です。制限計算で使用される実質トークン数とは異なる場合があります。" />
+            </CardTitle>
             <div className="flex space-x-2 border rounded-md overflow-hidden">
               <button
                 className={`px-3 py-1 text-sm ${timeRange === '7' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
@@ -241,21 +263,33 @@ export default function TokenUsage() {
             <div className="space-y-6">
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-gray-100 p-4 rounded-lg">
-                  <div className="text-gray-500 text-sm">総トークン数</div>
+                  <div className="text-gray-500 text-sm flex items-center">
+                    総トークン数
+                    <InfoTooltip content="プロンプトトークンとレスポンストークンの合計です。制限計算で使用される実質トークン数とは異なる場合があります。" />
+                  </div>
                   <div className="text-2xl font-bold mt-1">{formatNumber(totalUsage.total_tokens)}</div>
                 </div>
                 <div className="bg-gray-100 p-4 rounded-lg">
-                  <div className="text-gray-500 text-sm">プロンプトトークン</div>
+                  <div className="text-gray-500 text-sm flex items-center">
+                    プロンプトトークン
+                    <InfoTooltip content="あなたが送信したメッセージで使用されたトークン数です。" />
+                  </div>
                   <div className="text-2xl font-bold mt-1">{formatNumber(totalUsage.total_prompt_tokens)}</div>
                 </div>
                 <div className="bg-gray-100 p-4 rounded-lg">
-                  <div className="text-gray-500 text-sm">レスポンストークン</div>
+                  <div className="text-gray-500 text-sm flex items-center">
+                    レスポンストークン
+                    <InfoTooltip content="AIが生成した返答で使用されたトークン数です。制限計算では、このトークンがより重く計算される場合があります。" />
+                  </div>
                   <div className="text-2xl font-bold mt-1">{formatNumber(totalUsage.total_completion_tokens)}</div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">モデル別使用量</h3>
+                <h3 className="text-lg font-medium flex items-center">
+                  モデル別使用量
+                  <InfoTooltip content="各AIモデルでの実際のトークン使用量です。制限計算では、モデルごとに異なる重み付け比率が適用される場合があります。" />
+                </h3>
                 <div className="space-y-3">
                   {tokenUsage.map((model) => (
                     <div key={model.model_name} className="border rounded-lg p-4">
