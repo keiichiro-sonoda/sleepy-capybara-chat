@@ -160,7 +160,7 @@ function ChatContent() {
     }
   };
 
-  const loadChatHistory = async (sessionId: number) => {
+  const loadChatHistory = async (sessionId: number, session?: ChatSession) => {
     try {
       setIsLoading(true);
       const history = await getChatMessages(sessionId);
@@ -170,7 +170,8 @@ function ChatContent() {
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
         timestamp: new Date(msg.created_at),
-        modelName: msg.model_name,
+        // バックエンドからmodel_idを受け取り、アシスタントメッセージのみに設定
+        modelName: msg.role === 'assistant' ? msg.model_id : undefined,
         thinkingContent: msg.thinking_content
       }));
 
@@ -191,7 +192,7 @@ function ChatContent() {
     if (selectedSession) {
       setCurrentSession(selectedSession);
       setIsNewChat(false);
-      await loadChatHistory(sessionId);
+      await loadChatHistory(sessionId, selectedSession);
     }
   };
 

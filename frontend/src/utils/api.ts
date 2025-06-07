@@ -158,7 +158,7 @@ export type ChatMessage = {
   role: string;
   content: string;
   created_at: string;
-  model_name?: string;
+  model_id: string;  // バックエンドからはmodel_idとして送信される
   thinking_content?: string | null;
 };
 
