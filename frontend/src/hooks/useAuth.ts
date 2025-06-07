@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { fetchCurrentUser, getApiUrl } from '@/utils/api';
+import { fetchCurrentUser, register as apiRegister } from '@/utils/api';
 
 export type User = {
   email: string;
@@ -93,16 +93,7 @@ export const useAuth = () => {
   // ユーザー登録処理
   const register = async ({ email, password }: RegisterParams) => {
     try {
-      const response = await axios.post(`${getApiUrl()}/v1/auth/register`, {
-        email,
-        password,
-      });
-
-      if (response.data.error) {
-        throw new Error(response.data.error);
-      }
-
-      return response.data;
+      return await apiRegister(email, password);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
         const message = error.response.data.detail || error.response.data.message;

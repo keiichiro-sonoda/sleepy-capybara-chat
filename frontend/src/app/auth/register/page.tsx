@@ -29,7 +29,8 @@ export default function RegisterPage() {
 
     try {
       await register({ email, password });
-      router.push('/auth/verify-email-sent');
+      const sentAt = Date.now();
+      router.push(`/auth/verify-email-sent?email=${encodeURIComponent(email)}&sentAt=${sentAt}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '登録中にエラーが発生しました');
     } finally {

@@ -94,6 +94,25 @@ export const loginWithCredentials = async (email: string, password: string) => {
   return response.data;
 };
 
+// ユーザー登録
+export const register = async (email: string, password: string) => {
+  const response = await axios.post(`${getApiUrl()}/v1/auth/register`, {
+    email,
+    password,
+  });
+
+  return response.data;
+};
+
+// 確認メールを再送信
+export const resendConfirmationEmail = async (email: string): Promise<{ message: string }> => {
+  const response = await axios.post(`${getApiUrl()}/v1/auth/resend-confirmation`, {
+    email,
+  });
+
+  return response.data;
+};
+
 // ユーザー情報を取得
 export const fetchCurrentUser = async (): Promise<User> => {
   return await authGet<User>('/v1/auth/me');
