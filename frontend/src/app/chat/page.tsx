@@ -49,6 +49,8 @@ function ChatContent() {
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
   const [isThinkingModeEnabled, setIsThinkingModeEnabled] = useState(false);
   const [isThinkingDetailsOpen, setIsThinkingDetailsOpen] = useState(false);
+  const [hasMoreSessions, setHasMoreSessions] = useState(true);
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
 
   useEffect(() => {
     const initApp = async () => {
@@ -87,43 +89,48 @@ function ChatContent() {
     initApp();
   }, []);
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (offset: number = 0, append: boolean = false) => {
     try {
-      setLoadingSessions(true);
-      const chatSessions = await getChatSessions();
+      if (!append) {
+        setLoadingSessions(true);
+      } else {
+        setLoadingMoreSessions(true);
+      }
 
-      const sessionsWithLastMessageAt = await Promise.all(
-        chatSessions.map(async (session) => {
-          try {
-            const messages = await getChatMessages(session.id);
-            const lastMessageAt = messages.length > 0
-              ? new Date(messages[messages.length - 1].created_at)
-              : new Date(session.created_at);
+      const chatSessions = await getChatSessions(20, offset);
 
-            return {
-              ...session,
-              lastMessageAt
-            };
-          } catch (err) {
-            console.error(`Failed to fetch messages for session ${session.id}:`, err);
-            return {
-              ...session,
-              lastMessageAt: new Date(session.created_at)
-            };
-          }
-        })
-      );
+      // updated_atを使って並べ替え（APIから既にソートされているが、フロントエンドでも確実にソート）
+      const sortedSessions = chatSessions
+        .map(session => ({
+          ...session,
+          lastMessageAt: new Date(session.updated_at || session.created_at)
+        }))
+        .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
 
-      const sortedSessions = sessionsWithLastMessageAt.sort((a, b) =>
-        b.lastMessageAt.getTime() - a.lastMessageAt.getTime()
-      );
+      if (append) {
+        // 既存のセッションIDを取得
+        const existingIds = new Set(sessions.map(session => session.id));
+        // 新しいセッションから既存IDを除外
+        const newSessions = sortedSessions.filter(session => !existingIds.has(session.id));
+        setSessions(prev => [...prev, ...newSessions]);
+      } else {
+        setSessions(sortedSessions);
+      }
 
-      setSessions(sortedSessions);
+      // 取得したセッション数が20未満の場合、これ以上のセッションはない
+      setHasMoreSessions(chatSessions.length === 20);
     } catch (err) {
       console.error('Failed to fetch chat sessions:', err);
       setError('チャットセッションの取得に失敗しました');
     } finally {
       setLoadingSessions(false);
+      setLoadingMoreSessions(false);
+    }
+  };
+
+  const loadMoreSessions = () => {
+    if (!loadingMoreSessions && hasMoreSessions) {
+      fetchSessions(sessions.length, true);
     }
   };
 
@@ -404,6 +411,9 @@ function ChatContent() {
           onDeleteSession={handleDeleteSession}
           onNewChat={prepareNewChat}
           isLoading={loadingSessions || isLoading}
+          hasMoreSessions={hasMoreSessions}
+          loadingMoreSessions={loadingMoreSessions}
+          onLoadMoreSessions={loadMoreSessions}
         />
 
         <div className="flex flex-col flex-1 overflow-hidden">

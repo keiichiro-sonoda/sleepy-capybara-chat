@@ -172,8 +172,12 @@ export const createChatSession = async (modelId?: string): Promise<ChatSession> 
 };
 
 // 全てのチャットセッションを取得
-export const getChatSessions = async (): Promise<ChatSession[]> => {
-  return await authGet<ChatSession[]>('/v1/chat/sessions');
+export const getChatSessions = async (limit: number = 20, offset: number = 0): Promise<ChatSession[]> => {
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    offset: offset.toString()
+  });
+  return await authGet<ChatSession[]>(`/v1/chat/sessions?${params.toString()}`);
 };
 
 // セッションのメッセージ履歴を取得

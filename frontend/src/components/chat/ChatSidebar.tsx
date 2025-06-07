@@ -1,6 +1,7 @@
 import { ChatSession } from '@/utils/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import { useEffect, useRef } from 'react';
 
 // ChatSessionを拡張した型を定義
 interface ExtendedChatSession extends ChatSession {
@@ -14,6 +15,9 @@ type ChatSidebarProps = {
   onDeleteSession: (sessionId: number) => void;
   onNewChat: () => void;
   isLoading: boolean;
+  hasMoreSessions?: boolean;
+  loadingMoreSessions?: boolean;
+  onLoadMoreSessions?: () => void;
 };
 
 const ChatSidebar = ({
@@ -22,13 +26,47 @@ const ChatSidebar = ({
   onSessionSelect,
   onDeleteSession,
   onNewChat,
-  isLoading
+  isLoading,
+  hasMoreSessions = false,
+  loadingMoreSessions = false,
+  onLoadMoreSessions,
 }: ChatSidebarProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   // 日付をフォーマットする関数
   const formatDate = (date?: Date) => {
     if (!date) return '';
     return formatDistanceToNow(date, { addSuffix: true, locale: ja });
   };
+
+  // スクロールイベントハンドラ
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer || !onLoadMoreSessions) return;
+
+    let isScrollHandling = false;
+
+    const handleScroll = () => {
+      if (isScrollHandling) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const remaining = scrollHeight - scrollTop - clientHeight;
+
+      // スクロールが下から50px以内に来たら追加読み込み
+      if (remaining < 50 && hasMoreSessions && !loadingMoreSessions) {
+        isScrollHandling = true;
+        onLoadMoreSessions();
+
+        // 500ms後にフラグをリセット
+        setTimeout(() => {
+          isScrollHandling = false;
+        }, 500);
+      }
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, [hasMoreSessions, loadingMoreSessions, onLoadMoreSessions]);
 
   return (
     <div className="w-64 bg-gray-800 text-white h-full flex flex-col">
@@ -51,84 +89,86 @@ const ChatSidebar = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-2">
+      <div className="flex-1 overflow-hidden">
+        <div className="p-2 h-full flex flex-col">
           <h3 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">チャット履歴</h3>
           {sessions.length === 0 ? (
             <div className="text-center py-4 text-gray-400 text-sm">
               {isLoading ? '読み込み中...' : '履歴がありません'}
             </div>
           ) : (
-            <ul className="space-y-1">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto space-y-1">
               {sessions.map((session) => (
-                <li key={session.id}>
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => onSessionSelect(session.id)}
-                      className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${currentSessionId === session.id
-                        ? 'bg-gray-700 text-white'
-                        : 'text-gray-300 hover:bg-gray-700'
-                        }`}
-                    >
-                      <div className="flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 mr-2 opacity-70"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                          />
-                        </svg>
-                        <div className="truncate">
-                          <p className="truncate">
-                            {session.name || new Date(session.created_at).toLocaleDateString()}
-                          </p>
-                          <div className="text-xs">
-                            <span className="text-gray-400">{session.model_name}</span>
-                            {session.lastMessageAt && (
-                              <span className="text-gray-500 ml-2">
-                                {formatDate(session.lastMessageAt)}
-                              </span>
-                            )}
-                          </div>
+                <div key={session.id} className="flex items-center min-w-0">
+                  <button
+                    onClick={() => onSessionSelect(session.id)}
+                    className={`flex-1 min-w-0 text-left px-3 py-2 rounded-lg transition-colors ${currentSessionId === session.id
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-300 hover:bg-gray-700'
+                      }`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">
+                          {session.name || new Date(session.created_at).toLocaleDateString()}
+                        </p>
+                        <div className="text-xs flex items-center min-w-0">
+                          <span className="text-gray-400 flex-shrink-0">{session.model_name}</span>
+                          {session.lastMessageAt && (
+                            <span className="text-gray-500 ml-2 truncate">
+                              {formatDate(session.lastMessageAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (window.confirm('このチャット履歴を削除してもよろしいですか？')) {
-                          onDeleteSession(session.id);
-                        }
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-400"
-                      title="削除"
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('このチャット履歴を削除してもよろしいですか？')) {
+                        onDeleteSession(session.id);
+                      }
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-400 flex-shrink-0"
+                    title="削除"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
               ))}
-            </ul>
+
+              {/* 追加読み込み用のローディング表示 */}
+              {loadingMoreSessions && (
+                <div className="text-center py-2 text-gray-400 text-sm">
+                  <div className="flex justify-center items-center">
+                    <svg className="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    追加読み込み中...
+                  </div>
+                </div>
+              )}
+
+              {/* すべて読み込み完了の表示 */}
+              {!hasMoreSessions && sessions.length > 0 && (
+                <div className="text-center py-2 text-gray-500 text-xs">すべてのセッションを表示しました</div>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import json
 import typing
 from typing import cast, AsyncGenerator, Any
+from sqlalchemy import func, desc
 
 from app.core.config import get_settings
 from app.core.security import get_current_user
@@ -45,9 +46,41 @@ async def create_chat_session(
 
 @router.get("/sessions", response_model=list[ChatSessionSchema])
 async def get_chat_sessions(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    limit: int = 20,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> list[ChatSession]:
-    return db.query(ChatSession).filter(ChatSession.user_id == current_user.id).all()
+    # セッションと最後のメッセージ情報を効率的に取得
+    sessions_query = (
+        db.query(ChatSession)
+        .filter(ChatSession.user_id == current_user.id)
+        .order_by(desc(ChatSession.updated_at))
+        .limit(limit)
+        .offset(offset)
+    )
+
+    sessions = sessions_query.all()
+
+    # 各セッションの最後のメッセージ情報を取得
+    for session in sessions:
+        last_message = (
+            db.query(Message)
+            .filter(Message.session_id == session.id)
+            .order_by(desc(Message.created_at))
+            .first()
+        )
+
+        # セッションの updated_at を最後のメッセージ時刻に更新（まだ更新されていない場合）
+        if last_message and (
+            not session.updated_at or session.updated_at < last_message.created_at
+        ):
+            session.updated_at = last_message.created_at
+            db.add(session)
+
+    db.commit()
+
+    return sessions
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageSchema])
@@ -125,6 +158,11 @@ async def create_message(
         model_id=message.model_id,
     )
     db.add(user_message)
+
+    # セッションのupdated_atを更新
+    chat_session.updated_at = func.now()
+    db.add(chat_session)
+
     db.commit()
     db.refresh(user_message)
 
@@ -230,6 +268,11 @@ async def create_message(
             thinking_content=thinking_content,
         )
         db.add(ai_message)
+
+        # セッションのupdated_atを更新
+        chat_session.updated_at = func.now()
+        db.add(chat_session)
+
         db.commit()
 
         return ChatResponseWithThinking(
@@ -373,6 +416,15 @@ async def _stream_chat_response(
                     thinking_content=final_thinking_content_to_save,
                 )
                 db.add(db_message)
+
+                # セッションのupdated_atを更新
+                chat_session_for_update = (
+                    db.query(ChatSession).filter(ChatSession.id == session_id).first()
+                )
+                if chat_session_for_update:
+                    chat_session_for_update.updated_at = func.now()
+                    db.add(chat_session_for_update)
+
                 db.commit()
                 db.refresh(db_message)
                 logger.info(f"AI response saved to DB: message_id={db_message.id}")
