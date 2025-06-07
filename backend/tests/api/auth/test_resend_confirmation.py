@@ -40,11 +40,14 @@ def verified_user(db: Session):
 
 
 @pytest.mark.asyncio
-@patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
+@patch("app.services.email.get_email_service")
 async def test_resend_confirmation_to_unverified_user(
-    mock_send_email, client, db: Session, unverified_user
+    mock_get_service, client, db: Session, unverified_user
 ):
     """Test resending confirmation to an unverified user."""
+    mock_service = AsyncMock()
+    mock_get_service.return_value = mock_service
+
     response = client.post(
         "/api/v1/auth/resend-confirmation", json={"email": unverified_user.email}
     )
@@ -54,7 +57,7 @@ async def test_resend_confirmation_to_unverified_user(
         "message": "If your email is registered and not verified, a new confirmation email has been sent."
     }
 
-    mock_send_email.assert_called_once()
+    mock_service.send_verification_email.assert_called_once()
 
     updated_user = db.query(User).filter(User.id == unverified_user.id).first()
     assert updated_user.verification_token is not None
@@ -70,11 +73,14 @@ async def test_resend_confirmation_to_unverified_user(
 
 
 @pytest.mark.asyncio
-@patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
+@patch("app.services.email.get_email_service")
 async def test_resend_confirmation_to_verified_user(
-    mock_send_email, client, verified_user
+    mock_get_service, client, verified_user
 ):
     """Test resending confirmation to an already verified user."""
+    mock_service = AsyncMock()
+    mock_get_service.return_value = mock_service
+
     response = client.post(
         "/api/v1/auth/resend-confirmation", json={"email": verified_user.email}
     )
@@ -84,13 +90,16 @@ async def test_resend_confirmation_to_verified_user(
         "message": "If your email is registered and not verified, a new confirmation email has been sent."
     }
 
-    mock_send_email.assert_not_called()
+    mock_service.send_verification_email.assert_not_called()
 
 
 @pytest.mark.asyncio
-@patch("app.api.auth.auth.send_verification_email", new_callable=AsyncMock)
-async def test_resend_confirmation_to_nonexistent_user(mock_send_email, client):
+@patch("app.services.email.get_email_service")
+async def test_resend_confirmation_to_nonexistent_user(mock_get_service, client):
     """Test resending confirmation to a non-existent user."""
+    mock_service = AsyncMock()
+    mock_get_service.return_value = mock_service
+
     response = client.post(
         "/api/v1/auth/resend-confirmation", json={"email": "nonexistent@example.com"}
     )
@@ -100,4 +109,4 @@ async def test_resend_confirmation_to_nonexistent_user(mock_send_email, client):
         "message": "If your email is registered and not verified, a new confirmation email has been sent."
     }
 
-    mock_send_email.assert_not_called()
+    mock_service.send_verification_email.assert_not_called()
