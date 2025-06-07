@@ -53,9 +53,18 @@ class ChatService:
     @staticmethod
     async def generate_session_name_from_message(message_content: str) -> str:
         """最初のメッセージの内容を基にセッション名を生成する"""
-        prompt = f"""あなたはチャットセッションの名前を生成するアシスタントです。
-以下のメッセージの内容を基に、20文字以内の簡潔で分かりやすいセッション名を1つだけ返してください。
-メッセージ: {message_content}"""
+        prompt = f"""あなたはチャットセッションの名前を生成する優秀なアシスタントです。
+以下のルールとメッセージの内容を基に、セッション名を生成してください。
+
+# ルール
+- メッセージの内容を要約し、最も的確な名前を付けてください。
+- セッション名は20文字以内にしてください。
+- メッセージで使われている言語と同じ言語で名前を生成してください。
+- 生成するセッション名に、引用符（"や'）やその他の装飾を含めないでください。
+- セッション名のみを返してください。他のテキストは含めないでください。
+
+# メッセージ
+{message_content}"""
 
         try:
             # Ollamaプロバイダを使用
@@ -63,8 +72,8 @@ class ChatService:
             generated_name = await provider.text_generation(prompt, "llama3")
 
             # 生成された名前が長すぎる場合はカット
-            if len(generated_name) > 20:
-                generated_name = generated_name[:17] + "..."
+            if len(generated_name) > 10:
+                generated_name = generated_name[:7] + "..."
 
             return generated_name
 

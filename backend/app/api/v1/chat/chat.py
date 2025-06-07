@@ -134,8 +134,8 @@ async def create_message(
         session_name = await ChatService.generate_session_name_from_message(
             user_content
         )
-        # If the assignment error on chat_session.name persists, uncomment the next line
-        # chat_session.name = session_name # type: ignore[assignment]
+        # セッション名をデータベースに保存
+        chat_session.name = session_name
         db.commit()
 
     # 会話履歴を取得
