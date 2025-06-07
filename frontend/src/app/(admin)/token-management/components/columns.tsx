@@ -3,6 +3,7 @@
 import { ColumnDef, Row } from "@tanstack/react-table"
 import type { UserWithTokenLimits } from "@/lib/types"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 // import { Checkbox } from "@/components/ui/checkbox" // 必要であれば選択用チェックボックス
 // import { ArrowUpDown } from "lucide-react" // ソートアイコン用
 
@@ -48,11 +49,18 @@ export const columns: ColumnDef<UserWithTokenLimits>[] = [
     // },
   },
   {
-    accessorKey: "is_admin",
-    header: "Admin",
+    accessorKey: "is_active",
+    header: "Status",
     cell: ({ row }: { row: Row<UserWithTokenLimits> }) => {
-      const isAdmin = row.getValue("is_admin")
-      return isAdmin ? "Yes" : "No"
+      const isActive = row.getValue("is_active")
+      return (
+        <Badge 
+          variant={isActive ? "default" : "destructive"}
+          className={isActive ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}
+        >
+          {isActive ? "Active" : "Inactive"}
+        </Badge>
+      )
     },
   },
   {
@@ -60,7 +68,14 @@ export const columns: ColumnDef<UserWithTokenLimits>[] = [
     header: "Verified",
     cell: ({ row }: { row: Row<UserWithTokenLimits> }) => {
       const isVerified = row.getValue("is_verified")
-      return isVerified ? "Yes" : "No"
+      return (
+        <Badge 
+          variant={isVerified ? "default" : "secondary"}
+          className={isVerified ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-gray-100 text-gray-800 border-gray-200"}
+        >
+          {isVerified ? "Verified" : "Unverified"}
+        </Badge>
+      )
     },
   },
   {
@@ -88,13 +103,15 @@ export const columns: ColumnDef<UserWithTokenLimits>[] = [
     cell: ({ row }: { row: Row<UserWithTokenLimits> }) => {
       const user = row.original;
       return (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => console.log("Edit user:", user.email)} // TODO: 編集処理を実装
-        >
-          Edit Limits
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => console.log("Edit user:", user.email)} // TODO: 編集処理を実装
+          >
+            Edit
+          </Button>
+        </div>
       );
     },
   },

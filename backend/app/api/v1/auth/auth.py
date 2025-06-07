@@ -219,23 +219,41 @@ async def delete_me(
     return {"message": "Your account has been deleted successfully"}
 
 
-@router.post("/users/{user_id}/admin")
-async def set_admin(
+@router.post("/users/{user_id}/active")
+async def set_user_active(
     user_id: int,
-    is_admin: bool,
+    request: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_admin),
 ) -> dict[str, str]:
+    """管理者が他のユーザーの有効・無効状態を切り替える"""
+    is_active = request.get("is_active")
+    if is_active is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="is_active field is required",
+        )
+
+    # 自分自身を無効化することを防止
+    if current_user.id == user_id and not is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate your own account",
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    user.is_admin = is_admin
+    user.is_active = is_active
     db.commit()
 
-    return {"message": f"Admin status updated to {is_admin} for user {user_id}"}
+    logger.info(
+        f"User {user_id} active status updated to {is_active} by admin {current_user.id}"
+    )
+    return {"message": f"User active status updated to {is_active} for user {user_id}"}
 
 
 @router.get("/users", response_model=list[UserList])

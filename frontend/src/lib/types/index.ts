@@ -28,6 +28,7 @@ export interface User {
   email: string;
   is_verified: boolean;
   is_admin: boolean;
+  is_active: boolean;
 }
 
 export interface UserWithTokenLimits extends User {

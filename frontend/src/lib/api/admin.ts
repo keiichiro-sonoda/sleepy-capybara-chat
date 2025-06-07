@@ -38,6 +38,13 @@ export const deleteTokenLimit = async (limitId: number): Promise<void> => {
   await authDelete(`/v1/admin/token-limits/${limitId}`);
 };
 
+/**
+ * ユーザーの有効・無効状態を切り替えます。
+ */
+export const setUserActive = async (userId: number, isActive: boolean): Promise<{ message: string }> => {
+  return await authPost<{ message: string }>(`/v1/auth/users/${userId}/active`, { is_active: isActive });
+};
+
 // 今後、トークン制限の作成、更新、削除などの管理者用API関数をここに追加していく
 // export const createTokenLimitForUser = async (userId: number, limitData: any) => { ... }
 // export const updateTokenLimit = async (limitId: number, updateData: any) => { ... }

@@ -16,6 +16,7 @@ class UserList(BaseModel):
     email: EmailStr
     is_verified: bool
     is_admin: bool
+    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
 

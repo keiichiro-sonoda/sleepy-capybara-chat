@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "./components/data-table"; // DataTable をインポート
 import { columns as baseColumns } from "./components/columns";   // Base columns をインポート (別名で)
 import { EditTokenLimitsDialog } from "./components/edit-token-limits-dialog"; // モーダルをインポート
+import { UserManagementDialog } from "./components/user-management-dialog"; // ユーザー管理ダイアログをインポート
 import { Button } from "@/components/ui/button"; // Button をインポート (アクションカラム用)
 
 // API呼び出し関数
@@ -23,6 +24,8 @@ export default function TokenManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // モーダル表示状態
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserWithTokenLimits | null>(null); // 編集対象ユーザー
+  const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false); // ユーザー管理ダイアログ表示状態
+  const [selectedUserForManagement, setSelectedUserForManagement] = useState<UserWithTokenLimits | null>(null); // ユーザー管理対象ユーザー
   const router = useRouter();
 
   // データ取得関数
@@ -76,8 +79,18 @@ export default function TokenManagementPage() {
     setIsEditDialogOpen(true);
   };
 
+  const handleOpenUserManagementDialog = (userToManage: UserWithTokenLimits) => {
+    setSelectedUserForManagement(userToManage);
+    setIsUserManagementDialogOpen(true);
+  };
+
   const handleLimitsUpdate = () => {
     // トークン制限が更新されたらデータを再取得してテーブルを更新
+    fetchData(); // 再取得（ローディング状態は管理しない）
+  };
+
+  const handleUserUpdate = () => {
+    // ユーザー情報が更新されたらデータを再取得してテーブルを更新
     fetchData(); // 再取得（ローディング状態は管理しない）
   };
 
@@ -90,14 +103,24 @@ export default function TokenManagementPage() {
         return {
           ...columnDef,
           cell: ({ row }: { row: { original: UserWithTokenLimits } }) => (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-sm bg-white hover:bg-gray-100 px-3 py-1 rounded transition-colors cursor-pointer border border-gray-300"
-              onClick={() => handleOpenEditDialog(row.original)} // ここでハンドラを呼び出す
-            >
-              Edit Limits
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-sm bg-white hover:bg-gray-100 px-3 py-1 rounded transition-colors cursor-pointer border border-gray-300"
+                onClick={() => handleOpenEditDialog(row.original)} // ここでハンドラを呼び出す
+              >
+                Edit Limits
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-sm bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded transition-colors cursor-pointer border border-blue-300 text-blue-700"
+                onClick={() => handleOpenUserManagementDialog(row.original)} // ユーザー管理ハンドラを呼び出す
+              >
+                Manage User
+              </Button>
+            </div>
           ),
         };
       }
@@ -145,7 +168,7 @@ export default function TokenManagementPage() {
   return (
     <div className="container mx-auto py-10">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">トークン制限管理</h1>
+        <h1 className="text-3xl font-bold">ユーザー・トークン制限管理</h1>
         <Button
           variant="ghost"
           size="sm"
@@ -158,7 +181,10 @@ export default function TokenManagementPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>ユーザー別トークン制限一覧</CardTitle>
+          <CardTitle>ユーザー一覧</CardTitle>
+          <p className="text-sm text-gray-600">
+            ユーザーの状態管理とトークン制限を設定できます
+          </p>
         </CardHeader>
         <CardContent>
           {loading && usersWithLimits.length === 0 ? ( // 再取得中の表示（任意）
@@ -173,12 +199,21 @@ export default function TokenManagementPage() {
         </CardContent>
       </Card>
 
-      {/* モーダルダイアログコンポーネント */}
+      {/* トークン制限編集モーダルダイアログコンポーネント */}
       <EditTokenLimitsDialog
         user={selectedUserForEdit} // 編集対象のユーザーを渡す
         isOpen={isEditDialogOpen}      // 表示状態を渡す
         onOpenChange={setIsEditDialogOpen} // 表示状態の変更関数を渡す
         onLimitsUpdate={handleLimitsUpdate} // 更新後の再取得コールバックを渡す
+      />
+
+      {/* ユーザー管理モーダルダイアログコンポーネント */}
+      <UserManagementDialog
+        user={selectedUserForManagement} // 管理対象のユーザーを渡す
+        isOpen={isUserManagementDialogOpen} // 表示状態を渡す
+        onOpenChange={setIsUserManagementDialogOpen} // 表示状態の変更関数を渡す
+        onUserUpdate={handleUserUpdate} // 更新後の再取得コールバックを渡す
+        currentUserId={usersWithLimits.find(u => u.email === user?.email)?.id} // 現在のユーザーIDを渡す
       />
     </div>
   );

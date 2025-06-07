@@ -46,9 +46,11 @@ function ProfileContent() {
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">ステータス</p>
+                <p className="text-sm text-muted-foreground">アカウントステータス</p>
                 <div className="flex items-center">
-                  <Badge variant="success">アクティブ</Badge>
+                  <Badge variant={user.is_active ? "success" : "destructive"}>
+                    {user.is_active ? 'アクティブ' : '無効'}
+                  </Badge>
                 </div>
               </div>
             </CardContent>
@@ -56,8 +58,9 @@ function ProfileContent() {
               <Button
                 onClick={() => router.push('/chat')}
                 className="w-full"
+                disabled={!user.is_active}
               >
-                チャットに戻る
+                {user.is_active ? 'チャットに戻る' : 'アカウントが無効です'}
               </Button>
             </CardFooter>
           </Card>
