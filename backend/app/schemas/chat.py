@@ -90,6 +90,10 @@ class ChatSessionCreate(ChatSessionBase):
     pass
 
 
+class ChatSessionUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255, description="セッション名")
+
+
 class ChatSession(ChatSessionBase):
     id: int
     created_at: datetime

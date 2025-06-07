@@ -415,6 +415,7 @@ function ChatContent() {
           hasMoreSessions={hasMoreSessions}
           loadingMoreSessions={loadingMoreSessions}
           onLoadMoreSessions={loadMoreSessions}
+          onSessionUpdate={fetchSessions}
         />
 
         <div className="flex flex-col flex-1 overflow-hidden">

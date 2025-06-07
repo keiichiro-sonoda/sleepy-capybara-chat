@@ -1,7 +1,7 @@
-import { ChatSession } from '@/utils/api';
+import { ChatSession, updateChatSessionName } from '@/utils/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // ChatSessionを拡張した型を定義
 interface ExtendedChatSession extends ChatSession {
@@ -18,6 +18,7 @@ type ChatSidebarProps = {
   hasMoreSessions?: boolean;
   loadingMoreSessions?: boolean;
   onLoadMoreSessions?: () => void;
+  onSessionUpdate?: () => void;
 };
 
 const ChatSidebar = ({
@@ -30,8 +31,11 @@ const ChatSidebar = ({
   hasMoreSessions = false,
   loadingMoreSessions = false,
   onLoadMoreSessions,
+  onSessionUpdate,
 }: ChatSidebarProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
 
   // 日付をフォーマットする関数
   const formatDate = (date?: Date) => {
@@ -67,6 +71,40 @@ const ChatSidebar = ({
     scrollContainer.addEventListener('scroll', handleScroll);
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
   }, [hasMoreSessions, loadingMoreSessions, onLoadMoreSessions]);
+
+  const handleEditSession = (sessionId: number) => {
+    setEditingSessionId(sessionId);
+    setNewName(sessions.find(s => s.id === sessionId)?.name || '');
+  };
+
+  const handleSaveSession = async () => {
+    if (editingSessionId !== null && newName.trim()) {
+      try {
+        await updateChatSessionName(editingSessionId, newName.trim());
+        // セッション一覧を更新するため、再読み込み処理が必要
+        setEditingSessionId(null);
+        setNewName('');
+        if (onSessionUpdate) {
+          onSessionUpdate();
+        }
+      } catch (error) {
+        console.error('Failed to update session name:', error);
+      }
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSessionId(null);
+    setNewName('');
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveSession();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
 
   return (
     <div className="w-64 bg-gray-800 text-white h-full flex flex-col">
@@ -109,45 +147,86 @@ const ChatSidebar = ({
                   >
                     <div className="flex items-center min-w-0">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">
-                          {session.name || new Date(session.created_at).toLocaleDateString()}
-                        </p>
-                        <div className="text-xs flex items-center min-w-0">
-                          <span className="text-gray-400 flex-shrink-0">{session.model_name}</span>
-                          {session.lastMessageAt && (
-                            <span className="text-gray-500 ml-2 truncate">
-                              {formatDate(session.lastMessageAt)}
-                            </span>
-                          )}
-                        </div>
+                        {editingSessionId === session.id ? (
+                          <input
+                            type="text"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onBlur={handleCancelEdit}
+                            onKeyDown={handleKeyPress}
+                            className="bg-gray-700 text-white px-2 py-1 rounded-lg"
+                            autoFocus
+                            onFocus={(e) => e.target.select()}
+                            style={{ width: '100%', minWidth: '120px' }}
+                          />
+                        ) : (
+                          <>
+                            <p className="truncate text-sm">
+                              {session.name || new Date(session.created_at).toLocaleDateString()}
+                            </p>
+                            <div className="text-xs flex items-center min-w-0">
+                              <span className="text-gray-400 flex-shrink-0">{session.model_name}</span>
+                              {session.lastMessageAt && (
+                                <span className="text-gray-500 ml-2 truncate">
+                                  {formatDate(session.lastMessageAt)}
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm('このチャット履歴を削除してもよろしいですか？')) {
-                        onDeleteSession(session.id);
-                      }
-                    }}
-                    className="p-2 text-gray-400 hover:text-red-400 flex-shrink-0"
-                    title="削除"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                  <div className="flex items-center flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditSession(session.id);
+                      }}
+                      className="p-2 text-gray-400 hover:text-blue-400 flex-shrink-0"
+                      title="名前を編集"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm('このチャット履歴を削除してもよろしいですか？')) {
+                          onDeleteSession(session.id);
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-400 flex-shrink-0"
+                      title="削除"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
 

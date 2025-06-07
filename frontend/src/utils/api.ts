@@ -318,3 +318,10 @@ export const sendChatMessageStreaming = async (
 export const deleteChatSession = async (sessionId: number): Promise<void> => {
   await authDelete(`/v1/chat/sessions/${sessionId}`);
 };
+
+// チャットセッション名を更新
+export const updateChatSessionName = async (sessionId: number, name: string): Promise<ChatSession> => {
+  return await authPut<ChatSession>(`/v1/chat/sessions/${sessionId}`, {
+    name: name
+  });
+};

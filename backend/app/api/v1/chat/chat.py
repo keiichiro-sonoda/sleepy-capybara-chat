@@ -15,6 +15,7 @@ from app.models.chat import ChatSession, Message
 from app.schemas.chat import (
     ChatSessionCreate,
     ChatSession as ChatSessionSchema,
+    ChatSessionUpdate,
     MessageCreate,
     MessageSchema,
     ChatResponseWithThinking,
@@ -481,6 +482,36 @@ async def _stream_chat_response(
     except Exception as e:
         logger.error(f"Error in streaming response: {e}", exc_info=True)
         yield "data: " + json.dumps({"event": "error", "message": str(e)}) + "\n\n"
+
+
+@router.put("/sessions/{session_id}", response_model=ChatSessionSchema)
+async def update_chat_session(
+    session_id: int,
+    session_update: ChatSessionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatSession:
+    """チャットセッションの名前を更新する"""
+    # セッションの存在確認と所有権チェック
+    chat_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.user_id == current_user.id)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found"
+        )
+
+    # セッション名を更新
+    chat_session.name = session_update.name
+    chat_session.updated_at = func.now()
+    db.add(chat_session)
+    db.commit()
+    db.refresh(chat_session)
+
+    logger.info(f"Updated chat session name: {session_id} -> '{session_update.name}'")
+    return chat_session
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
