@@ -165,9 +165,11 @@ class OpenAIProvider(ModelProvider):
             # 完全なレスポンスを構築
             full_response = ""
             response_id = None  # レスポンスID (resp_XXX) を格納
+            last_chunk = None
 
             # ストリーミングイベントを処理
             async for chunk in stream:
+                last_chunk = chunk
                 event_type = type(chunk).__name__
 
                 # レスポンスIDを収集（様々なイベントソースから）
@@ -219,8 +221,8 @@ class OpenAIProvider(ModelProvider):
             }
 
             # 1. 直接的な方法：イベントから直接usage情報を取得
-            if hasattr(chunk, "usage") and chunk.usage:
-                usage_data = self._extract_token_usage(chunk.usage)
+            if last_chunk is not None and hasattr(last_chunk, "usage") and last_chunk.usage:
+                usage_data = self._extract_token_usage(last_chunk.usage)
                 self._log_token_usage(usage_data, model_name, "event")
 
             # 2. フォールバック：レスポンスIDを使って取得
