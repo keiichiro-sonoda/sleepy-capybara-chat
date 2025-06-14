@@ -47,8 +47,12 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "admin123"  # 本番環境では必ず変更すること
 
     # Email Service Configuration
-    EMAIL_SERVICE: str = "mailhog"  # "mailhog" or "sendgrid"
+    EMAIL_SERVICE: str = "mailhog"  # "mailhog", "sendgrid", or "gmail"
     SENDGRID_API_KEY: str = ""  # SendGrid API Key
+
+    # Gmail SMTP設定
+    GMAIL_USER: str = ""  # Gmail address
+    GMAIL_APP_PASSWORD: str = ""  # Gmail App Password (not regular password)
 
     @property
     def DATABASE_URL(self) -> str:
