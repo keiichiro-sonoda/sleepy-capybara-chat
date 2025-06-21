@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
@@ -53,44 +53,7 @@ function ChatContent() {
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    const initApp = async () => {
-      try {
-        setLoadingModel(true);
-        const [defaultModel, fetchedModels] = await Promise.all([
-          getDefaultModel(),
-          getAvailableModels()
-        ]);
-        setSelectedModel(defaultModel);
-        setAvailableModels(fetchedModels);
-
-        const defaultModelInfo = fetchedModels.find(m => m.id === defaultModel);
-        if (defaultModelInfo) {
-          if (defaultModelInfo.thinking_mode === 'forced') {
-            setIsThinkingModeEnabled(true);
-          } else if (defaultModelInfo.thinking_mode === 'optional') {
-            setIsThinkingModeEnabled(false);
-          } else {
-            setIsThinkingModeEnabled(false);
-          }
-        }
-
-      } catch (err) {
-        console.error('Failed to initialize app:', err);
-        setError("アプリの初期化に失敗しました。")
-        setSelectedModel("qwen3");
-        setAvailableModels([{ id: "qwen3", name: "Qwen3 Fallback", provider: "ollama", thinking_mode: "optional" }]);
-      } finally {
-        setLoadingModel(false);
-      }
-
-      fetchSessions();
-    };
-
-    initApp();
-  }, []);
-
-  const fetchSessions = async (offset: number = 0, append: boolean = false) => {
+  const fetchSessions = useCallback(async (offset: number = 0, append: boolean = false) => {
     try {
       if (!append) {
         setLoadingSessions(true);
@@ -127,13 +90,51 @@ function ChatContent() {
       setLoadingSessions(false);
       setLoadingMoreSessions(false);
     }
-  };
+  }, []);
 
-  const loadMoreSessions = () => {
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        setLoadingModel(true);
+        const [defaultModel, fetchedModels] = await Promise.all([
+          getDefaultModel(),
+          getAvailableModels()
+        ]);
+        setSelectedModel(defaultModel);
+        setAvailableModels(fetchedModels);
+
+        const defaultModelInfo = fetchedModels.find(m => m.id === defaultModel);
+        if (defaultModelInfo) {
+          if (defaultModelInfo.thinking_mode === 'forced') {
+            setIsThinkingModeEnabled(true);
+          } else if (defaultModelInfo.thinking_mode === 'optional') {
+            setIsThinkingModeEnabled(false);
+          } else {
+            setIsThinkingModeEnabled(false);
+          }
+        }
+
+      } catch (err) {
+        console.error('Failed to initialize app:', err);
+        setError("アプリの初期化に失敗しました。")
+        setSelectedModel("qwen3");
+        setAvailableModels([{ id: "qwen3", name: "Qwen3 Fallback", provider: "ollama", thinking_mode: "optional" }]);
+      } finally {
+        setLoadingModel(false);
+      }
+
+      fetchSessions();
+    };
+
+    initApp();
+  }, [fetchSessions]);
+
+  const loadMoreSessions = useCallback(() => {
     if (!loadingMoreSessions && hasMoreSessions) {
       fetchSessions(sessions.length, true);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchSessions, loadingMoreSessions, hasMoreSessions]);
 
   const prepareNewChat = () => {
     setMessages([]);
@@ -161,7 +162,7 @@ function ChatContent() {
     }
   };
 
-  const loadChatHistory = async (sessionId: number, session?: ChatSession) => {
+  const loadChatHistory = async (sessionId: number) => {
     try {
       setIsLoading(true);
       const history = await getChatMessages(sessionId);
@@ -193,7 +194,7 @@ function ChatContent() {
     if (selectedSession) {
       setCurrentSession(selectedSession);
       setIsNewChat(false);
-      await loadChatHistory(sessionId, selectedSession);
+      await loadChatHistory(sessionId);
     }
   };
 
@@ -274,7 +275,7 @@ function ChatContent() {
             (chunk: string, type: 'thinking' | 'answer') => {
               setMessages(prev => prev.map(msg => {
                 if (msg.id === aiMessageId) {
-                  let updatedMsg = { ...msg };
+                  const updatedMsg = { ...msg };
                   if (type === 'thinking') {
                     updatedMsg.streamingThinkingContent = (updatedMsg.streamingThinkingContent || '') + chunk;
                   } else {
@@ -410,7 +411,7 @@ function ChatContent() {
       <div className="flex flex-1 overflow-hidden relative">
         {/* Mobile overlay */}
         {isSidebarOpen && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />

@@ -14,7 +14,8 @@ export const getUsersWithTokenLimitsSummary = async (): Promise<UserWithTokenLim
  */
 export const createTokenLimit = async (limitData: Omit<TokenLimit, 'id'>): Promise<TokenLimit> => {
   // model_nameはバックエンドに送信しない（表示用のみ）
-  const { model_name, ...apiData } = limitData;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { model_name: _, ...apiData } = limitData;
   return await authPost<TokenLimit>('/v1/admin/token-limits', apiData);
 };
 
@@ -27,7 +28,8 @@ export const updateTokenLimit = async (
   updateData: Partial<Omit<TokenLimit, 'id' | 'user_id'>>
 ): Promise<TokenLimit> => {
   // model_nameはバックエンドに送信しない（表示用のみ）
-  const { model_name, ...apiData } = updateData;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { model_name: _, ...apiData } = updateData;
   return await authPut<TokenLimit>(`/v1/admin/token-limits/${limitId}`, apiData);
 };
 

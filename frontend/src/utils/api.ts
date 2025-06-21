@@ -41,7 +41,7 @@ export const authGet = async <T>(url: string, config?: AxiosRequestConfig): Prom
 };
 
 // 認証が必要なPOSTリクエスト
-export const authPost = async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+export const authPost = async <T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> => {
   const token = localStorage.getItem('token');
 
   if (!token) {
@@ -54,7 +54,7 @@ export const authPost = async <T>(url: string, data?: any, config?: AxiosRequest
 };
 
 // 認証が必要なPUTリクエスト
-export const authPut = async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+export const authPut = async <T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> => {
   const token = localStorage.getItem('token');
 
   if (!token) {
@@ -283,7 +283,7 @@ export const sendChatMessageStreaming = async (
         if (errorJson && errorJson.detail) {
           errorBody += ` - ${errorJson.detail}`;
         }
-      } catch (e) {
+      } catch {
         // JSONパース失敗時は何もしない
       }
       throw new Error(errorBody);
@@ -327,8 +327,8 @@ export const sendChatMessageStreaming = async (
             onError(eventData.message || 'Unknown error');
             return;
           }
-        } catch (e) {
-          console.error('Error parsing event data:', e, line);
+        } catch (parseError) {
+          console.error('Error parsing event data:', parseError, line);
         }
       }
     }

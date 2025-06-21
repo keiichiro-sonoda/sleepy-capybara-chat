@@ -45,10 +45,13 @@ function VerifyEmailContent() {
           router.push('/auth/login');
         }, 3000);
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Email verification failed:', error); // デバッグログ
         setStatus('error');
-        setErrorMessage(error.message || 'メールアドレスの確認中に予期せぬエラーが発生しました。');
+        setErrorMessage(
+          (error instanceof Error ? error.message : null) || 
+          'メールアドレスの確認中に予期せぬエラーが発生しました。'
+        );
       }
     };
 

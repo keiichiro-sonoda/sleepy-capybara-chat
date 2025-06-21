@@ -19,17 +19,20 @@ export default function ForgotPasswordPage() {
     setMessage('');
 
     try {
-      const res = await requestPasswordReset(email);
+      await requestPasswordReset(email);
       const sentAt = Date.now();
       router.push(`/auth/password-reset-sent?email=${encodeURIComponent(email)}&sentAt=${sentAt}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       let errorMessage = 'パスワードリセット要求に失敗しました。';
 
-      if (err.response?.status === 429) {
-        errorMessage = 'しばらく時間をおいてから再度お試しください。';
-      } else if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response: { status?: number; data?: { detail?: string } } };
+        if (axiosError.response?.status === 429) {
+          errorMessage = 'しばらく時間をおいてから再度お試しください。';
+        } else if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        }
       }
 
       setError(errorMessage);

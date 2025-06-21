@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchTokenUsageByModel, TokenUsageByModel, fetchMyTokenLimitsSummary, TokenLimitSummary, TokenLimitsSummaryResponse } from '@/utils/api'
+import { fetchTokenUsageByModel, TokenUsageByModel, fetchMyTokenLimitsSummary, TokenLimitSummary } from '@/utils/api'
 
 // Shadcn UI components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

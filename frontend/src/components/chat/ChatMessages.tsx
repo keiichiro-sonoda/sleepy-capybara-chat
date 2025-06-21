@@ -59,7 +59,7 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
     if (isThinkingDetailsOpenForStreamingMessage) {
       thinkingContentRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.map(m => m.streamingThinkingContent).join(''), isThinkingDetailsOpenForStreamingMessage]);
+  }, [isThinkingDetailsOpenForStreamingMessage, messages]);
 
   // メッセージの状態に応じたステータスメッセージを返す
   const getStatusMessage = (message: Message): string => {

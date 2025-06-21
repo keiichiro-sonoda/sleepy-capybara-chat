@@ -33,8 +33,7 @@ const ChatHeader = ({
   availableModels,
   isThinkingModeEnabled,
   onToggleThinkingMode,
-  onToggleSidebar,
-  isSidebarOpen
+  onToggleSidebar
 }: ChatHeaderProps) => {
   const router = useRouter();
 

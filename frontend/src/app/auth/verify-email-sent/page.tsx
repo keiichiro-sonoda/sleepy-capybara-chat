@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { resendConfirmationEmail } from '@/utils/api';
 
-export default function VerifyEmailSentPage() {
+function VerifyEmailSentContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
@@ -45,21 +45,24 @@ export default function VerifyEmailSentPage() {
     setMessage('');
     setError('');
     try {
-      const response = await resendConfirmationEmail(email);
-      setMessage(response.message || '確認メールを再送信しました。');
+      const resendResponse = await resendConfirmationEmail(email);
+      setMessage(resendResponse.message || '確認メールを再送信しました。');
       setCooldownSeconds(60); // 60秒のクールダウン
 
       // URLを更新して新しい送信時刻を記録
       const newSentAt = Date.now();
       const newUrl = `/auth/verify-email-sent?email=${encodeURIComponent(email)}&sentAt=${newSentAt}`;
       router.replace(newUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       let errorMessage = 'メールの再送信に失敗しました。';
 
-      if (err.response?.status === 429) {
-        errorMessage = 'しばらく時間をおいてから再度お試しください。';
-      } else if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response: { status?: number; data?: { detail?: string } } };
+        if (axiosError.response?.status === 429) {
+          errorMessage = 'しばらく時間をおいてから再度お試しください。';
+        } else if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        }
       }
 
       setError(errorMessage);
@@ -118,5 +121,13 @@ export default function VerifyEmailSentPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyEmailSentPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">読み込み中...</div>}>
+      <VerifyEmailSentContent />
+    </Suspense>
   );
 } 

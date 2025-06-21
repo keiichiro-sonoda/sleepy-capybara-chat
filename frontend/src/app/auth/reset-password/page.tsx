@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from 'react';
+import { FormEvent, useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { confirmPasswordReset, verifyPasswordResetToken } from '@/utils/api';
 import Link from 'next/link';
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get('token') || '';
@@ -29,10 +29,15 @@ export default function ResetPasswordPage() {
         const result = await verifyPasswordResetToken(token);
         setIsTokenValid(true);
         setUserEmail(result.email);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setIsTokenValid(false);
-        if (err.response?.status === 400) {
-          setError('このリンクは無効または期限切れです。新しいパスワードリセット要求を行ってください。');
+        if (err && typeof err === 'object' && 'response' in err) {
+          const axiosError = err as { response: { status?: number } };
+          if (axiosError.response?.status === 400) {
+            setError('このリンクは無効または期限切れです。新しいパスワードリセット要求を行ってください。');
+          } else {
+            setError('トークンの検証に失敗しました。');
+          }
         } else {
           setError('トークンの検証に失敗しました。');
         }
@@ -57,10 +62,15 @@ export default function ResetPasswordPage() {
       const res = await confirmPasswordReset(token, newPassword);
       setMessage(res.message);
       setTimeout(() => router.push('/auth/login'), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      if (err.response?.status === 400) {
-        setError('このリンクは無効または期限切れです。新しいパスワードリセット要求を行ってください。');
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response: { status?: number } };
+        if (axiosError.response?.status === 400) {
+          setError('このリンクは無効または期限切れです。新しいパスワードリセット要求を行ってください。');
+        } else {
+          setError('パスワードリセットに失敗しました。');
+        }
       } else {
         setError('パスワードリセットに失敗しました。');
       }
@@ -189,5 +199,13 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">読み込み中...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 } 

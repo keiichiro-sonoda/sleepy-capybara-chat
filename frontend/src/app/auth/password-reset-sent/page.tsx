@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { requestPasswordReset } from '@/utils/api';
 
-export default function PasswordResetSentPage() {
+function PasswordResetSentContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
@@ -45,7 +45,7 @@ export default function PasswordResetSentPage() {
     setMessage('');
     setError('');
     try {
-      const response = await requestPasswordReset(email);
+      await requestPasswordReset(email);
       setMessage('パスワードリセットメールを再送信しました。');
       setCooldownSeconds(60); // 60秒のクールダウン
 
@@ -53,13 +53,16 @@ export default function PasswordResetSentPage() {
       const newSentAt = Date.now();
       const newUrl = `/auth/password-reset-sent?email=${encodeURIComponent(email)}&sentAt=${newSentAt}`;
       router.replace(newUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       let errorMessage = 'メールの再送信に失敗しました。';
 
-      if (err.response?.status === 429) {
-        errorMessage = 'しばらく時間をおいてから再度お試しください。';
-      } else if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response: { status?: number; data?: { detail?: string } } };
+        if (axiosError.response?.status === 429) {
+          errorMessage = 'しばらく時間をおいてから再度お試しください。';
+        } else if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        }
       }
 
       setError(errorMessage);
@@ -123,5 +126,13 @@ export default function PasswordResetSentPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PasswordResetSentPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">読み込み中...</div>}>
+      <PasswordResetSentContent />
+    </Suspense>
   );
 } 
