@@ -68,6 +68,7 @@ docker compose exec ollama ollama pull llama3
 ```
 
 注意：
+
 - モデルのダウンロードには時間がかかる場合があります（モデルサイズによって数分から数十分）
 - 初回のチャットリクエスト時は、モデルのロードに時間がかかる場合があります
 
@@ -91,21 +92,38 @@ poetry run uvicorn main:app --reload
 
 ### 6. アクセス方法
 
-- フロントエンド: http://localhost:3000
-- バックエンドAPI: http://localhost:8000
-- APIドキュメント: http://localhost:8000/docs
+- フロントエンド: <http://localhost:3000>
+- バックエンドAPI: <http://localhost:8000>
+- APIドキュメント: <http://localhost:8000/docs>
 
 ## プロジェクト構造
 
-```
+```text
 sleepy-capybara-chat/
 ├── frontend/           # Next.js フロントエンド
 ├── backend/            # FastAPI バックエンド
-├── nginx/              # Nginx 設定
+├── nginx/              # Nginx 設定（現在未使用、Cloudflare Tunnelを使用）
 ├── docker-compose.yml  # Docker Compose 設定
 ├── .env                # プロジェクト共通環境変数
 └── docs/               # プロジェクトドキュメント
 ```
+
+### アーキテクチャ構成
+
+**現在の構成（Cloudflare Tunnel使用）:**
+
+```text
+Internet → Cloudflare → Tunnel → frontend:3000 (直接)
+Internet → Cloudflare → Tunnel → backend:8000 (直接)
+```
+
+**将来的なnginx使用時の構成（必要に応じて）:**
+
+```text
+Internet → Cloudflare → Tunnel → nginx:80 → frontend:3000/backend:8000
+```
+
+> **注意**: `nginx/` ディレクトリは設定ファイルが含まれていますが、現在Cloudflare Tunnelを使用しているため使用されていません。詳細は [`nginx/nginx.conf`](nginx/nginx.conf) のコメントを参照してください。
 
 ## 開発時の注意点
 
@@ -134,9 +152,10 @@ sleepy-capybara-chat/
 - フロントエンド: Next.js, React, TypeScript, TailwindCSS
 - バックエンド: FastAPI, Python 3.13+
 - データベース: PostgreSQL
-- AI/LLM: Ollama API
+- AI/LLM: Ollama API, OpenAI API
 - コンテナ化: Docker, Docker Compose
-- リバースプロキシ: Nginx
+- 外部アクセス: Cloudflare Tunnel
+- リバースプロキシ: Nginx（現在未使用）
 
 ## ライセンス
 

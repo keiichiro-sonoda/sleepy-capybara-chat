@@ -1,0 +1,33 @@
+FROM python:3.13-slim
+ENV PYTHONUNBUFFERED=1
+
+# システムユーザーの作成
+RUN useradd -m -u 1000 appuser
+
+WORKDIR /src
+
+# pipを使ってpoetryをインストール
+RUN pip install poetry
+
+# poetryの定義ファイルをコピー
+COPY pyproject.toml poetry.lock ./
+
+# poetryでライブラリをインストール（本番用：開発依存関係を除外）
+RUN poetry config virtualenvs.in-project true
+RUN poetry install --no-root --only=main
+
+# アプリケーションコードをコピー
+COPY app app/
+
+# マイグレーション関連ファイルもコピー
+COPY migrations migrations/
+COPY alembic.ini .
+
+# 権限の設定
+RUN chown -R appuser:appuser /src
+
+# ユーザーの切り替え
+USER appuser
+
+# 本番環境では--reloadオプションを削除し、パフォーマンスを向上
+ENTRYPOINT ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 

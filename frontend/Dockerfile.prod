@@ -1,0 +1,48 @@
+# マルチステージビルド: ビルドステージ
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# パッケージファイルをコピーして全ての依存関係をインストール（ビルドに必要）
+COPY package*.json ./
+RUN npm ci
+
+# ソースコードをコピーしてビルド
+COPY . .
+
+# ビルド時環境変数を設定
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME}
+
+RUN npm run build
+
+# 本番用依存関係のみ再インストール
+RUN npm ci --omit=dev && npm cache clean --force
+
+# マルチステージビルド: 実行ステージ
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+# セキュリティのため非rootユーザーを作成
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# 必要なファイルのみコピー
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# ユーザーの切り替え
+USER nextjs
+
+# ポート設定
+EXPOSE 3000
+
+ENV PORT 3000
+ENV NODE_ENV production
+
+# 本番サーバーを起動
+CMD ["node", "server.js"] 
