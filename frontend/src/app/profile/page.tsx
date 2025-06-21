@@ -19,23 +19,23 @@ function ProfileContent() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">プロフィール</h1>
-        <p className="text-muted-foreground">あなたのアカウント情報とトークン使用量を確認できます。</p>
+    <div className="container mx-auto py-4 sm:py-8 px-4">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">プロフィール</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">あなたのアカウント情報とトークン使用量を確認できます。</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         {/* プロフィール情報 */}
         <div className="lg:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle>アカウント情報</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">アカウント情報</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm text-muted-foreground">メールアドレス</p>
-                <p className="font-medium">{user.email}</p>
+                <p className="font-medium text-sm sm:text-base break-all">{user.email}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">メール認証</p>
@@ -57,7 +57,7 @@ function ProfileContent() {
             <CardFooter>
               <Button
                 onClick={() => router.push('/chat')}
-                className="w-full"
+                className="w-full text-sm sm:text-base"
                 disabled={!user.is_active}
               >
                 {user.is_active ? 'チャットに戻る' : 'アカウントが無効です'}

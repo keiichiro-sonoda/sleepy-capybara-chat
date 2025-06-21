@@ -34,21 +34,53 @@ const AlertDescription = ({ children, className }: { children: React.ReactNode; 
 )
 
 // CSS-onlyツールチップコンポーネント
-const InfoTooltip = ({ content }: { content: string }) => (
-  <div className="relative inline-block group">
-    <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help ml-1" />
-    {/* デスクトップ用: 中央配置 */}
-    <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-80 max-w-md">
-      <div className="text-left leading-relaxed">{content}</div>
-      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+const InfoTooltip = ({ content }: { content: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+        className="cursor-help focus:outline-none"
+        aria-label="詳細情報"
+      >
+        <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 ml-1" />
+      </button>
+
+      {/* デスクトップ用: 中央配置 */}
+      <div className={`hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg transition-all duration-200 z-50 w-80 max-w-md ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+        <div className="text-left leading-relaxed">{content}</div>
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+      </div>
+
+      {/* モバイル用: 画面中央に固定表示 */}
+      {isOpen && (
+        <div className="sm:hidden fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-sm">
+          <div className="bg-gray-900/95 text-white text-sm rounded-lg px-4 py-3 shadow-lg max-h-[80vh] overflow-y-auto">
+            <div className="text-left leading-relaxed">{content}</div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="mt-3 w-full bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-3 rounded transition-colors"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* モバイル用オーバーレイ（タップして閉じる） */}
+      {isOpen && (
+        <div
+          className="sm:hidden fixed inset-0 z-40 bg-black bg-opacity-20"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
     </div>
-    {/* モバイル用: 右寄せで画面内に収める */}
-    <div className="sm:hidden absolute bottom-full right-0 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-72 max-w-[85vw]">
-      <div className="text-left leading-relaxed">{content}</div>
-      <div className="absolute top-full right-4 border-4 border-transparent border-t-gray-900"></div>
-    </div>
-  </div>
-)
+  );
+};
 
 export default function TokenUsage() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageByModel[]>([])

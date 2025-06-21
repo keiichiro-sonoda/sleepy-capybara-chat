@@ -71,11 +71,22 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
-      <div className="max-w-3xl mx-auto space-y-4">
+    <div className="flex-1 overflow-y-auto bg-white px-2 sm:px-4 py-4">
+      <div className="max-w-4xl mx-auto">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg">
-            <p>{error}</p>
+          <div className="mb-4 p-3 sm:p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+            <strong>エラー:</strong> {error}
+          </div>
+        )}
+
+        {isNewChat && messages.length === 0 && !isLoading && (
+          <div className="text-center py-8 sm:py-12">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-600 mb-2">
+              🦥 Sleepy Capybara Chatへようこそ！
+            </h2>
+            <p className="text-sm sm:text-base text-gray-500">
+              新しい会話を始めましょう。下のフォームからメッセージを送信してください。
+            </p>
           </div>
         )}
 
@@ -115,59 +126,76 @@ const ChatMessages = ({ messages, isLoading, error, sessionName, isNewChat = fal
             return (
               <div
                 key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 px-2 sm:px-4`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg ${message.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
-                    } p-4`}
+                  className={`max-w-[85%] sm:max-w-[70%] p-3 sm:p-4 rounded-lg ${message.role === 'user'
+                    ? 'bg-blue-600 text-white ml-auto'
+                    : 'bg-gray-200 text-gray-800'
+                    }`}
                 >
+                  {/* User messages */}
+                  {message.role === 'user' && (
+                    <div className="text-sm sm:text-base">{message.content}</div>
+                  )}
+
+                  {/* Assistant messages */}
                   {message.role === 'assistant' && (
-                    <div className="text-xs font-medium mb-2 text-gray-600 bg-gray-100 px-2 py-0.5 rounded inline-block">
-                      {getModelDisplayName(message.modelName)}
-                    </div>
-                  )}
-
-                  {/* ストリーム中の思考表示 */}
-                  {isActivelyStreamingThinking && (
-                    <div className="mb-4 bg-yellow-50 border border-yellow-400 p-3 rounded text-sm text-yellow-900">
-                      <div className="flex items-center mb-2">
-                        <svg className="animate-spin h-4 w-4 mr-2 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="font-medium">AIが思考中...</span>
+                    <>
+                      {/* Model name for assistant */}
+                      <div className="text-xs text-gray-500 mb-2 font-medium">
+                        {getModelDisplayName(message.modelName)}
                       </div>
-                      <pre className="whitespace-pre-wrap bg-yellow-100 p-2 rounded max-h-40 overflow-auto text-xs">
-                        {streamingThinking}
-                      </pre>
-                    </div>
-                  )}
-                  {/* 完了後の思考表示 */}
-                  {showFinalThinking && (
-                    <details className="mb-2 cursor-pointer group">
-                      <summary className="text-xs text-gray-500 hover:text-gray-700 list-none outline-none">
-                        <span className="font-medium">思考過程を表示...</span>
-                      </summary>
-                      <div className="mt-1 p-2 border-l-2 border-gray-300 bg-gray-100 rounded-r text-xs text-gray-600 whitespace-pre-wrap">
-                        {finalThinking}
-                      </div>
-                    </details>
-                  )}
 
-                  {/* 回答内容 */}
-                  {showAnswerContent && (
-                    <p className="whitespace-pre-wrap">
-                      {message.content}
-                      {message.isStreaming && (
-                        <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse" />
+                      {/* Streaming thinking content */}
+                      {isActivelyStreamingThinking && (
+                        <details
+                          open={isThinkingDetailsOpenForStreamingMessage}
+                          className="mb-3 bg-gray-50 rounded p-2 sm:p-3 border"
+                        >
+                          <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                            🤔 思考中...
+                          </summary>
+                          <div
+                            ref={thinkingContentRef}
+                            className="mt-2 text-xs sm:text-sm text-gray-600 whitespace-pre-wrap bg-gray-100 p-2 rounded border-l-4 border-blue-400"
+                          >
+                            {streamingThinking}
+                          </div>
+                        </details>
                       )}
-                    </p>
+
+                      {/* Final thinking content */}
+                      {showFinalThinking && (
+                        <details className="mb-3 bg-gray-50 rounded p-2 sm:p-3 border">
+                          <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                            🤔 思考過程を表示
+                          </summary>
+                          <div className="mt-2 text-xs sm:text-sm text-gray-600 whitespace-pre-wrap bg-gray-100 p-2 rounded border-l-4 border-blue-400">
+                            {finalThinking}
+                          </div>
+                        </details>
+                      )}
+
+                      {/* Answer content */}
+                      {showAnswerContent && (
+                        <div className="text-sm sm:text-base whitespace-pre-wrap">
+                          {message.content}
+                          {message.isStreaming && getStatusMessage(message) && (
+                            <div className="text-xs text-gray-500 mt-2 italic">
+                              {getStatusMessage(message)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
-                  <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {message.timestamp.toLocaleTimeString()}
-                    {message.isStreaming && ` (${getStatusMessage(message)})`}
+
+                  <div className="text-xs text-gray-400 mt-2 opacity-70">
+                    {message.timestamp.toLocaleTimeString('ja-JP', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </div>
                 </div>
               </div>
