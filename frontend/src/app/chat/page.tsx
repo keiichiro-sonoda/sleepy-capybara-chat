@@ -51,6 +51,7 @@ function ChatContent() {
   const [isThinkingDetailsOpen, setIsThinkingDetailsOpen] = useState(false);
   const [hasMoreSessions, setHasMoreSessions] = useState(true);
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const initApp = async () => {
@@ -402,23 +403,47 @@ function ChatContent() {
         availableModels={availableModels}
         isThinkingModeEnabled={isThinkingModeEnabled}
         onToggleThinkingMode={toggleThinkingMode}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        isSidebarOpen={isSidebarOpen}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <ChatSidebar
-          sessions={sessions}
-          currentSessionId={currentSession?.id || null}
-          onSessionSelect={handleSessionSelect}
-          onDeleteSession={handleDeleteSession}
-          onNewChat={prepareNewChat}
-          isLoading={loadingSessions || isLoading}
-          hasMoreSessions={hasMoreSessions}
-          loadingMoreSessions={loadingMoreSessions}
-          onLoadMoreSessions={loadMoreSessions}
-          onSessionUpdate={fetchSessions}
-        />
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile overlay */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
 
-        <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <div className={`
+          fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+          transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
+          transition-transform duration-300 ease-in-out lg:transition-none
+          w-64 lg:w-64
+        `}>
+          <ChatSidebar
+            sessions={sessions}
+            currentSessionId={currentSession?.id || null}
+            onSessionSelect={(sessionId) => {
+              handleSessionSelect(sessionId);
+              setIsSidebarOpen(false); // モバイルでセッション選択後にサイドバーを閉じる
+            }}
+            onDeleteSession={handleDeleteSession}
+            onNewChat={() => {
+              prepareNewChat();
+              setIsSidebarOpen(false); // モバイルで新しいチャット開始後にサイドバーを閉じる
+            }}
+            isLoading={loadingSessions || isLoading}
+            hasMoreSessions={hasMoreSessions}
+            loadingMoreSessions={loadingMoreSessions}
+            onLoadMoreSessions={loadMoreSessions}
+            onSessionUpdate={fetchSessions}
+          />
+        </div>
+
+        <div className="flex flex-col flex-1 overflow-hidden lg:ml-0">
           <ChatMessages
             messages={messages}
             isLoading={isLoading || loadingModel}
