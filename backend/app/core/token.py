@@ -41,11 +41,22 @@ def generate_reset_token() -> str:
 
 
 def set_reset_token(db: Session, user: User, hours: int = 1) -> str:
-    """Generate a password reset token, persist it on the user record and return it.
+    """Generate and persist a password reset token for ``user``.
 
-    The token is valid for the specified number of `hours` (default: 1 hour).
+    Row-level locking is used to avoid race conditions when multiple requests
+    attempt to generate a reset token for the same user concurrently.
+
+    The token is valid for ``hours`` hours (default: 1).
     """
     from datetime import timezone  # 遅延インポートで循環参照を防止
+
+    # Acquire a row-level lock to prevent concurrent token updates for the same user
+    user = (
+        db.query(User)
+        .filter(User.id == user.id)
+        .with_for_update()
+        .one()
+    )
 
     token = generate_reset_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
