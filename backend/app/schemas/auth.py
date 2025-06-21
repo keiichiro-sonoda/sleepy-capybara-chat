@@ -25,3 +25,21 @@ class User(UserBase):
     is_admin: bool
     is_verified: bool
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------------------
+# パスワードリセット関連スキーマ
+# ------------------------------
+
+
+class PasswordResetRequest(BaseModel):
+    """メールアドレスを受け取り、パスワードリセットメールを送信するリクエストスキーマ"""
+
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    """パスワードリセットトークンと新しいパスワードを受け取るスキーマ"""
+
+    token: str
+    new_password: str

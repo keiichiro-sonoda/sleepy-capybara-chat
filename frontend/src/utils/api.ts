@@ -349,3 +349,40 @@ export const updateChatSessionName = async (sessionId: number, name: string): Pr
     name: name
   });
 };
+
+// ------------------------------
+// パスワードリセット関連API
+// ------------------------------
+
+// パスワードリセットメール送信
+export const requestPasswordReset = async (email: string): Promise<{ message: string }> => {
+  const response = await axios.post(`${getApiUrl()}/v1/auth/password-reset/request`, {
+    email,
+  });
+
+  return response.data;
+};
+
+// パスワードリセット実行
+export const confirmPasswordReset = async (
+  token: string,
+  newPassword: string
+): Promise<{ message: string }> => {
+  const response = await axios.post(`${getApiUrl()}/v1/auth/password-reset/confirm`, {
+    token,
+    new_password: newPassword,
+  });
+
+  return response.data;
+};
+
+// パスワードリセットトークンの検証
+export const verifyPasswordResetToken = async (
+  token: string
+): Promise<{ message: string; email: string }> => {
+  const response = await axios.get(`${getApiUrl()}/v1/auth/password-reset/verify-token`, {
+    params: { token },
+  });
+
+  return response.data;
+};

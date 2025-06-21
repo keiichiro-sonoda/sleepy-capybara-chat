@@ -118,6 +118,12 @@ export default function LoginPage() {
             アカウントをお持ちでない方はこちら
           </Link>
         </div>
+
+        <div className="text-sm text-center mt-2">
+          <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-500">
+            パスワードをお忘れですか？
+          </Link>
+        </div>
       </div>
     </div>
   );
