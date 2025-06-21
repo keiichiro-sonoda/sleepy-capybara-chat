@@ -15,13 +15,24 @@ from app.core.security import (
     get_current_user,
 )
 from app.core.deps import get_current_active_admin
-from app.core.token import set_verification_token, verify_token
+from app.core.token import (
+    set_verification_token,
+    verify_token,
+    set_reset_token,
+    verify_reset_token,
+)
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import Token, UserCreate, User as UserSchema
+from app.schemas.auth import (
+    Token,
+    UserCreate,
+    User as UserSchema,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+)
 from app.schemas.user import UserList
 from app.schemas.email import ResendConfirmationRequest
-from app.services.email import send_verification_email
+from app.services.email import send_verification_email, send_password_reset_email
 
 router = APIRouter()
 settings = get_settings()
@@ -139,9 +150,11 @@ async def login(
 async def resend_confirmation(
     request: ResendConfirmationRequest, db: Session = Depends(get_db)
 ) -> dict[str, str]:
-    """
-    Resend confirmation email to users who have an expired token or did not receive the original email.
-    Returns a success message regardless of whether the email exists for security reasons.
+    """確認メールを再送信する。
+
+    セキュリティ対策：
+    - メールアドレスが存在するかどうかに関わらず、常に同じ成功メッセージを返す
+    - これにより攻撃者がシステムに登録されているメールアドレスを特定できなくなる
     """
     user = db.query(User).filter(User.email == request.email).first()
 
@@ -271,3 +284,92 @@ async def list_users(
     """
     users = db.query(User).offset(skip).limit(limit).all()
     return users
+
+
+# ------------------------------
+# パスワードリセット機能
+# ------------------------------
+
+
+@router.post("/password-reset/request")
+async def password_reset_request(
+    request: PasswordResetRequest, db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """指定されたメールアドレス宛にパスワードリセットメールを送信する。
+
+    セキュリティ対策：
+    - メールアドレスが存在するかどうかに関わらず、常に同じ成功メッセージを返す
+    - これにより攻撃者が「このメールアドレスは登録されているか？」を判別できなくなる
+    - もしメールが存在しない場合に「そのメールアドレスは登録されていません」と返すと、
+      攻撃者が有効なメールアドレスのリストを作成できてしまう（ユーザー列挙攻撃）
+    - レート制限：同一ユーザーからの連続要求を60秒間制限
+    """
+
+    user = db.query(User).filter(User.email == request.email).first()
+
+    if user:
+        # レート制限チェック：最後のトークン生成から60秒以内は再送信を拒否
+        if user.reset_token_expires_at:
+            try:
+                # reset_token_expires_atは1時間後なので、59分前をチェック
+                expires_at = datetime.fromisoformat(user.reset_token_expires_at)
+                token_generated_at = expires_at - timedelta(hours=1)
+                time_since_last_token = datetime.now(timezone.utc) - token_generated_at
+
+                if time_since_last_token < timedelta(minutes=1):
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Please wait at least 1 minute before requesting another password reset email.",
+                    )
+            except ValueError:
+                # 無効な日付形式の場合は続行
+                pass
+
+        # トークンを生成してメール送信
+        # 新しいトークンを生成すると古いトークンは自動的に無効化される
+        token = set_reset_token(db, user)
+        try:
+            await send_password_reset_email(user.email, token)
+        except Exception as e:
+            logger.error(f"Failed to send password reset email: {str(e)}")
+            # メール送信エラー時も同一の成功メッセージを返す（セキュリティ対策）
+            pass
+
+    # 重要：メールアドレスが存在するかどうかを攻撃者に教えないため、
+    # 常に同じメッセージを返す
+    return {
+        "message": "If your email is registered, a password reset link has been sent."
+    }
+
+
+@router.post("/password-reset/confirm")
+async def password_reset_confirm(
+    request: PasswordResetConfirm, db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """トークンを検証し、パスワードをリセットする。"""
+
+    user = verify_reset_token(db, request.token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    # 新しいパスワードをハッシュ化して保存
+    user.hashed_password = get_password_hash(request.new_password)
+    # トークンを無効化
+    user.reset_token = None
+    user.reset_token_expires_at = None
+    db.commit()
+
+    return {"message": "Password reset successful"}
+
+
+@router.get("/password-reset/verify-token")
+async def verify_password_reset_token(
+    token: str, db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """パスワードリセットトークンの有効性を検証する（パスワード変更は行わない）"""
+
+    user = verify_reset_token(db, token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    return {"message": "Token is valid", "email": user.email}
