@@ -42,6 +42,12 @@ help:
 	@echo "  dev-models   - 開発環境のモデル一覧表示"
 	@echo "  prod-models  - 本番環境のモデル一覧表示"
 	@echo ""
+	@echo "🧪 テスト・品質チェック:"
+	@echo "  dev-test     - 開発環境でテスト実行"
+	@echo "  dev-lint     - 開発環境でリンティング実行"
+	@echo "  dev-mypy     - 開発環境でmypy型チェック実行"
+	@echo "  dev-fix-format - 開発環境でコードフォーマット自動修正"
+	@echo ""
 	@echo "🛠️ メンテナンス:"
 	@echo "  backup       - データベースバックアップ"
 	@echo "  clean        - 未使用のDockerリソースを削除"
@@ -209,6 +215,36 @@ prod-pull-model:
 	@echo "✅ $(MODEL)のダウンロード完了（本番環境）"
 
 # ========================================
+# テスト・品質チェック用コマンド
+# ========================================
+
+dev-test:
+	@echo "🧪 開発環境でテストを実行しています..."
+	docker compose exec backend poetry run pytest
+	@echo "✅ テスト実行完了"
+
+dev-lint:
+	@echo "🔍 開発環境でリンティングを実行しています..."
+	@echo "  📝 Black (コードフォーマット)..."
+	docker compose exec backend poetry run black --check --diff app/
+	@echo "  📋 isort (import順序)..."
+	docker compose exec backend poetry run isort --check-only --diff app/
+	@echo "  🔎 flake8 (スタイル)..."
+	docker compose exec backend poetry run flake8 app/
+	@echo "✅ リンティング完了"
+
+dev-mypy:
+	@echo "🔬 開発環境でmypy型チェックを実行しています..."
+	docker compose exec backend poetry run mypy app/
+	@echo "✅ 型チェック完了"
+
+dev-fix-format:
+	@echo "🔧 開発環境でコードフォーマットを修正しています..."
+	docker compose exec backend poetry run black app/
+	docker compose exec backend poetry run isort app/
+	@echo "✅ コードフォーマット修正完了"
+
+# ========================================
 # メンテナンス用コマンド
 # ========================================
 
@@ -332,4 +368,4 @@ prod-maintenance-end:
 	docker compose -f docker-compose.prod.yml start frontend cloudflared
 	@echo "✅ サービスを再開しました"
 
-.PHONY: help dev-up dev-down dev-build dev-logs dev-restart dev-build-backend dev-build-frontend dev-restart-backend dev-restart-frontend dev-logs-backend dev-logs-frontend prod-up prod-down prod-build prod-logs prod-restart prod-build-backend prod-build-frontend prod-restart-backend prod-restart-frontend prod-logs-backend prod-logs-frontend dev-models prod-models dev-pull-model prod-pull-model backup clean dev-shell-backend dev-shell-frontend dev-shell-db check-env dev-migration-status dev-migration-history dev-migrate dev-db-constraints prod-migration-status prod-migration-history prod-migrate prod-db-constraints prod-backup-db prod-restore-db prod-maintenance-start prod-maintenance-end
+.PHONY: help dev-up dev-down dev-build dev-logs dev-restart dev-build-backend dev-build-frontend dev-restart-backend dev-restart-frontend dev-logs-backend dev-logs-frontend prod-up prod-down prod-build prod-logs prod-restart prod-build-backend prod-build-frontend prod-restart-backend prod-restart-frontend prod-logs-backend prod-logs-frontend dev-models prod-models dev-pull-model prod-pull-model dev-test dev-lint dev-mypy dev-fix-format backup clean dev-shell-backend dev-shell-frontend dev-shell-db check-env dev-migration-status dev-migration-history dev-migrate dev-db-constraints prod-migration-status prod-migration-history prod-migrate prod-db-constraints prod-backup-db prod-restore-db prod-maintenance-start prod-maintenance-end
