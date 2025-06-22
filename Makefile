@@ -27,24 +27,24 @@ help:
 
 dev-up:
 	@echo "🚀 開発環境を起動しています..."
-	docker-compose up -d
+	docker compose up -d
 
 dev-down:
 	@echo "🛑 開発環境を停止しています..."
-	docker-compose down
+	docker compose down
 
 dev-build:
 	@echo "🔨 開発環境を再ビルドしています..."
-	docker-compose build --no-cache
-	docker-compose up -d
+	docker compose build --no-cache
+	docker compose up -d
 
 dev-logs:
 	@echo "📋 開発環境のログを表示しています..."
-	docker-compose logs -f
+	docker compose logs -f
 
 dev-restart:
 	@echo "🔄 開発環境を再起動しています..."
-	docker-compose restart
+	docker compose restart
 
 # ========================================
 # 本番環境用コマンド
@@ -52,24 +52,24 @@ dev-restart:
 
 prod-up:
 	@echo "🚀 本番環境を起動しています..."
-	docker-compose -f docker-compose.prod.yml up -d
+	docker compose -f docker-compose.prod.yml up -d
 
 prod-down:
 	@echo "🛑 本番環境を停止しています..."
-	docker-compose -f docker-compose.prod.yml down
+	docker compose -f docker-compose.prod.yml down
 
 prod-build:
 	@echo "🔨 本番環境を再ビルドしています..."
-	docker-compose -f docker-compose.prod.yml build --no-cache
-	docker-compose -f docker-compose.prod.yml up -d
+	docker compose -f docker-compose.prod.yml build --no-cache
+	docker compose -f docker-compose.prod.yml up -d
 
 prod-logs:
 	@echo "📋 本番環境のログを表示しています..."
-	docker-compose -f docker-compose.prod.yml logs -f
+	docker compose -f docker-compose.prod.yml logs -f
 
 prod-restart:
 	@echo "🔄 本番環境を再起動しています..."
-	docker-compose -f docker-compose.prod.yml restart
+	docker compose -f docker-compose.prod.yml restart
 
 # ========================================
 # メンテナンス用コマンド
@@ -79,7 +79,7 @@ backup:
 	@echo "💾 データベースをバックアップしています..."
 	@mkdir -p backups
 	@DATE=$$(date +%Y%m%d_%H%M%S); \
-	docker-compose exec -T db pg_dump -U $${POSTGRES_USER} $${POSTGRES_DB} > backups/backup_$${DATE}.sql && \
+	docker compose exec -T db pg_dump -U $${POSTGRES_USER} $${POSTGRES_DB} > backups/backup_$${DATE}.sql && \
 	echo "✅ バックアップ完了: backups/backup_$${DATE}.sql"
 
 clean:
@@ -93,15 +93,15 @@ clean:
 
 dev-shell-backend:
 	@echo "🐚 バックエンドコンテナに接続しています..."
-	docker-compose exec backend bash
+	docker compose exec backend bash
 
 dev-shell-frontend:
 	@echo "🐚 フロントエンドコンテナに接続しています..."
-	docker-compose exec frontend sh
+	docker compose exec frontend sh
 
 dev-shell-db:
 	@echo "🗄️ データベースに接続しています..."
-	docker-compose exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB}
+	docker compose exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB}
 
 # ========================================
 # 環境変数チェック用
