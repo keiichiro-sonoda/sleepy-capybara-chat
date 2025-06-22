@@ -30,7 +30,7 @@ sleepy-capybara-chat/
 - **対象**: Docker Compose全体に影響する設定
 - **例**:
   - データベース接続情報（POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB）
-  - サービス間の接続設定（BACKEND_URL, FRONTEND_URL）
+  - サービス間の接続設定（FRONTEND_URL）
   - コンテナのポート設定
   - コンテナの名前設定
 
@@ -83,19 +83,17 @@ sleepy-capybara-chat/
    services:
      backend:
        env_file:
-         - ./backend/.env
-       # 共通変数の上書きが必要な場合に使用
+         - .env                # 共通設定
+         - ./backend/.env      # バックエンド固有設定
        environment:
-         - DATABASE_URL=${DATABASE_URL}
-   ```
-
-3. **ボリュームとしてのマウント**：
-
-   ```yaml
-   services:
+         - ENVIRONMENT=development  # 環境固有の設定のみ
+     
      frontend:
-       volumes:
-         - ./frontend/.env.local:/app/.env.local
+       env_file:
+         - .env                # 共通設定（NEXT_PUBLIC_*を含む）
+         - ./frontend/.env.local  # フロントエンド固有設定
+       environment:
+         - NODE_ENV=development   # 環境固有の設定のみ
    ```
 
 4. **Next.js特有の注意点**：
@@ -103,18 +101,15 @@ sleepy-capybara-chat/
    ```yaml
    services:
      frontend:
-       # ❌ build argsは認識されない場合がある
-       build:
-         args:
-           - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
-       
-       # ✅ environmentで設定する
+       # ✅ 現在の推奨方法
+       env_file:
+         - .env
+         - ./frontend/.env.local
        environment:
-         - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
-         - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
+         - NODE_ENV=development
    ```
 
-   **重要**: Next.jsの`NEXT_PUBLIC_*`環境変数は、Docker Composeでは`environment`セクションで設定する必要があります。`build args`では正しく認識されない場合があります。
+   **重要**: Next.jsの`NEXT_PUBLIC_*`環境変数は、`.env`ファイルに設定すれば`env_file`を通じて自動的に読み込まれます。
 
 ## セキュリティ上の注意点
 
@@ -171,28 +166,30 @@ sleepy-capybara-chat/
 
 ### 1. Next.js環境変数がbuild argsで設定できない
 
-**症状**: Docker Composeでbuild argsに`NEXT_PUBLIC_*`環境変数を設定してもフロントエンドで認識されない
+**症状**: `NEXT_PUBLIC_*`環境変数がフロントエンドで認識されない
 
-**原因**: Next.jsのビルドプロセスでは、build argsよりもruntime環境変数（environment）が優先される
+**原因**: 環境変数が適切に設定されていない、またはDocker Composeが再起動されていない
 
 **解決方法**:
 
 ```yaml
-# ❌ 動作しないパターン
+# ✅ 現在の推奨パターン
 services:
   frontend:
-    build:
-      args:
-        - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api  # 認識されない
-
-# ✅ 正しいパターン  
-services:
-  frontend:
+    env_file:
+      - .env                    # NEXT_PUBLIC_*変数をここに設定
+      - ./frontend/.env.local   # 追加のローカル設定
     environment:
-      - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api   # 正常に認識される
+      - NODE_ENV=development    # 環境固有の設定のみ
 ```
 
-**教訓**: Next.jsコンテナでは`build args`ではなく`environment`で`NEXT_PUBLIC_*`変数を設定する
+```bash
+# .env ファイルに設定
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+```
+
+**教訓**: `NEXT_PUBLIC_*`変数は`.env`ファイルに設定し、`env_file`で読み込む
 
 ### 2. メールリンクのドメインが間違っている
 
@@ -298,7 +295,6 @@ POSTGRES_HOST=db                            # Dockerコンテナ名
 POSTGRES_PORT=5432
 
 # サービスURL設定
-BACKEND_URL=http://backend:8000
 FRONTEND_URL=https://your-tunnel-domain.com  # Cloudflare Tunnelのドメイン
 
 # Ollama設定
@@ -489,7 +485,6 @@ JWT_SECRET_KEY=your_64_character_secret_key
 
 # URL設定
 FRONTEND_URL=https://chat.your-domain.com
-BACKEND_URL=http://backend:8000
 
 # Cloudflare
 CLOUDFLARE_TUNNEL_TOKEN=your_token

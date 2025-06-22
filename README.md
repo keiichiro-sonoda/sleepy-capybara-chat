@@ -21,7 +21,7 @@ cd sleepy-capybara-chat
 
 プロジェクトは複数の環境変数ファイルを使用します：
 
-1. **プロジェクトルート**に`.env`ファイルを作成し、Docker Compose全体の設定を行います：
+1. **プロジェクトルート**に`.env`ファイルを作成し、共通設定を行います：
 
 ```bash
 # PostgreSQL
@@ -32,18 +32,22 @@ POSTGRES_DB=chatdb
 # JWT
 JWT_SECRET_KEY=your_jwt_secret_key
 
+# URL設定
+FRONTEND_URL=http://localhost:3000
+
+# フロントエンド用公開変数
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+
 # CORS
 CORS_ORIGINS=["http://localhost:3000"]
 ```
 
-2. **フロントエンド**用の環境変数は`frontend/.env.local`に設定します：
+2. **バックエンド**固有の設定は`backend/.env`に設定します。
 
-```bash
-# バックエンドAPI接続設定
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-```
+3. **フロントエンド**のローカル固有設定は`frontend/.env.local`に設定します（オプション）。
 
-3. **バックエンド**固有の設定は`backend/.env`に設定します。
+> **重要**: 現在の設定では`NEXT_PUBLIC_*`変数もルートの`.env`ファイルに設定し、`env_file`を通じて自動的に読み込まれます。
 
 > 詳細な環境変数管理の方針については[環境変数管理ドキュメント](docs/ENV_MANAGEMENT.md)を参照してください。
 
