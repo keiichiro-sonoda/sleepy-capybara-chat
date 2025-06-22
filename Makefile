@@ -45,6 +45,18 @@ help:
 	@echo "🛠️ メンテナンス:"
 	@echo "  backup       - データベースバックアップ"
 	@echo "  clean        - 未使用のDockerリソースを削除"
+	@echo ""
+	@echo "📊 データベース・マイグレーション:"
+	@echo "  dev-migration-status   - 開発環境のマイグレーション状態確認"
+	@echo "  prod-migration-status  - 本番環境のマイグレーション状態確認"
+	@echo "  dev-migration-history  - 開発環境のマイグレーション履歴表示"
+	@echo "  prod-migration-history - 本番環境のマイグレーション履歴表示"
+	@echo "  dev-migrate            - 開発環境のマイグレーション適用"
+	@echo "  prod-migrate           - 本番環境のマイグレーション適用"
+	@echo "  dev-db-constraints     - 開発環境のDB制約確認"
+	@echo "  prod-db-constraints    - 本番環境のDB制約確認"
+	@echo "  prod-backup-db         - 本番データベースバックアップ"
+	@echo "  prod-restore-db        - 本番データベース復元 (BACKUP_FILE=filename)"
 
 # ========================================
 # 開発環境用コマンド
@@ -239,4 +251,85 @@ check-env:
 	@echo "FRONTEND_URL: $${FRONTEND_URL}"
 	@echo "JWT_SECRET_KEY: [設定済み]" # セキュリティのため値は表示しない
 
-.PHONY: help dev-up dev-down dev-build dev-logs dev-restart dev-build-backend dev-build-frontend dev-restart-backend dev-restart-frontend dev-logs-backend dev-logs-frontend prod-up prod-down prod-build prod-logs prod-restart prod-build-backend prod-build-frontend prod-restart-backend prod-restart-frontend prod-logs-backend prod-logs-frontend dev-models prod-models dev-pull-model prod-pull-model backup clean dev-shell-backend dev-shell-frontend dev-shell-db check-env
+# ========================================
+# データベース・マイグレーション管理
+# ========================================
+
+# 開発環境 - マイグレーション
+dev-migration-status:
+	@echo "📊 開発環境のマイグレーション状態を確認しています..."
+	docker compose exec backend poetry run alembic current
+
+dev-migration-history:
+	@echo "📜 開発環境のマイグレーション履歴を表示しています..."
+	docker compose exec backend poetry run alembic history
+
+dev-migrate:
+	@echo "🔄 開発環境のマイグレーションを適用しています..."
+	docker compose exec backend poetry run alembic upgrade head
+	@echo "✅ マイグレーション適用完了（開発環境）"
+
+dev-db-constraints:
+	@echo "🔍 開発環境のデータベース制約を確認しています..."
+	@echo "=== chat_sessions テーブル ==="
+	docker compose exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ chat_sessions"
+	@echo ""
+	@echo "=== token_usage テーブル ==="
+	docker compose exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ token_usage"
+
+# 本番環境 - マイグレーション
+prod-migration-status:
+	@echo "📊 本番環境のマイグレーション状態を確認しています..."
+	docker compose -f docker-compose.prod.yml exec backend poetry run alembic current
+
+prod-migration-history:
+	@echo "📜 本番環境のマイグレーション履歴を表示しています..."
+	docker compose -f docker-compose.prod.yml exec backend poetry run alembic history
+
+prod-migrate:
+	@echo "🔄 本番環境のマイグレーションを適用しています..."
+	@echo "⚠️  本番環境でのマイグレーション適用を開始します"
+	@read -p "続行しますか？ (y/N): " confirm && [ "$$confirm" = "y" ]
+	docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade head
+	@echo "✅ マイグレーション適用完了（本番環境）"
+
+prod-db-constraints:
+	@echo "🔍 本番環境のデータベース制約を確認しています..."
+	@echo "=== chat_sessions テーブル ==="
+	docker compose -f docker-compose.prod.yml exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ chat_sessions"
+	@echo ""
+	@echo "=== token_usage テーブル ==="
+	docker compose -f docker-compose.prod.yml exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ token_usage"
+
+# 本番環境 - バックアップ・復元
+prod-backup-db:
+	@echo "💾 本番データベースをバックアップしています..."
+	@mkdir -p backups
+	@DATE=$$(date +%Y%m%d_%H%M%S); \
+	docker compose -f docker-compose.prod.yml exec -T db pg_dump -U $${POSTGRES_USER} $${POSTGRES_DB} > backups/prod_backup_$${DATE}.sql && \
+	echo "✅ 本番バックアップ完了: backups/prod_backup_$${DATE}.sql"
+
+prod-restore-db:
+	@echo "🔄 本番データベースを復元しています..."
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ エラー: BACKUP_FILE変数が設定されていません"; \
+		echo "使用例: make prod-restore-db BACKUP_FILE=backups/prod_backup_20250622_123456.sql"; \
+		exit 1; \
+	fi
+	@echo "⚠️  データベースを $(BACKUP_FILE) から復元します"
+	@read -p "続行しますか？ (y/N): " confirm && [ "$$confirm" = "y" ]
+	docker compose -f docker-compose.prod.yml exec -T db psql -U $${POSTGRES_USER} $${POSTGRES_DB} < $(BACKUP_FILE)
+	@echo "✅ データベース復元完了"
+
+# 本番環境 - メンテナンスモード
+prod-maintenance-start:
+	@echo "🚧 本番環境をメンテナンスモードにしています..."
+	docker compose -f docker-compose.prod.yml stop frontend cloudflared
+	@echo "✅ フロントエンドとCloudflare Tunnelを停止しました"
+
+prod-maintenance-end:
+	@echo "🚀 本番環境のメンテナンスモードを終了しています..."
+	docker compose -f docker-compose.prod.yml start frontend cloudflared
+	@echo "✅ サービスを再開しました"
+
+.PHONY: help dev-up dev-down dev-build dev-logs dev-restart dev-build-backend dev-build-frontend dev-restart-backend dev-restart-frontend dev-logs-backend dev-logs-frontend prod-up prod-down prod-build prod-logs prod-restart prod-build-backend prod-build-frontend prod-restart-backend prod-restart-frontend prod-logs-backend prod-logs-frontend dev-models prod-models dev-pull-model prod-pull-model backup clean dev-shell-backend dev-shell-frontend dev-shell-db check-env dev-migration-status dev-migration-history dev-migrate dev-db-constraints prod-migration-status prod-migration-history prod-migrate prod-db-constraints prod-backup-db prod-restore-db prod-maintenance-start prod-maintenance-end

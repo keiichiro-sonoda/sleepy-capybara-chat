@@ -26,16 +26,16 @@
 
    ```bash
    # 既にテーブルが存在する場合、現在のスキーマを最新として登録
-   docker-compose exec backend poetry run alembic stamp head
+   docker compose exec backend poetry run alembic stamp head
    ```
 
 2. **データベースの再作成**:
 
    ```bash
    # 問題が複雑な場合、データベースを完全にリセット
-   docker-compose down -v
-   docker-compose up -d
-   docker-compose exec backend poetry run alembic stamp head
+   docker compose down -v
+   docker compose up -d
+   docker compose exec backend poetry run alembic stamp head
    ```
 
 これらの対応は一時的なもので、根本的な解決策ではありません。
@@ -54,16 +54,16 @@
 
    ```bash
    # 初期マイグレーションを生成（既存データベースがリセットされた状態で）
-   docker-compose exec backend poetry run alembic revision --autogenerate -m "Initial database setup"
+   docker compose exec backend poetry run alembic revision --autogenerate -m "Initial database setup"
    ```
 
 3. **明確なデータベース初期化手順の文書化**:
 
    ```text
    # 新しい開発環境のセットアップ手順
-   1. docker-compose up -d
-   2. docker-compose exec backend poetry run alembic upgrade head
-   3. docker-compose restart backend
+   1. make dev-up
+   2. make dev-migrate
+   3. make dev-restart-backend
    ```
 
 4. **CI/CDパイプラインでのマイグレーション自動化**:
@@ -77,10 +77,10 @@
    ```text
    1. SQLAlchemyモデル（app/models/*.py）を変更する
    2. マイグレーションファイルを自動生成する:
-      docker-compose exec backend poetry run alembic revision --autogenerate -m "変更内容の説明"
+      docker compose exec backend poetry run alembic revision --autogenerate -m "変更内容の説明"
    3. 生成されたマイグレーションファイルを確認・編集する
    4. マイグレーションを適用する:
-      docker-compose exec backend poetry run alembic upgrade head
+      make dev-migrate
    5. アプリケーションが正常に動作することを確認する
    6. 変更をコミットする（モデル変更とマイグレーションファイルを同じコミットに含める）
    ```
@@ -112,18 +112,18 @@
 
    ```bash
    # alembic_versionテーブルを初期化
-   docker-compose exec db psql -U postgres -d capybara_chat -c "DELETE FROM alembic_version;"
-   docker-compose exec backend poetry run alembic stamp head
+   docker compose exec db psql -U postgres -d capybara_chat -c "DELETE FROM alembic_version;"
+   docker compose exec backend poetry run alembic stamp head
    ```
 
 3. **マイグレーションの競合**:
 
    ```bash
    # マイグレーション履歴を確認
-   docker-compose exec backend poetry run alembic history
+   make dev-migration-history
    
    # 特定のリビジョンまでダウングレード
-   docker-compose exec backend poetry run alembic downgrade <revision_id>
+   docker compose exec backend poetry run alembic downgrade <revision_id>
    ```
 
 4. **コンテナ内とホスト側のマイグレーションファイルの不一致**:
@@ -134,11 +134,11 @@
    #    例: ./backend/migrations:/src/migrations
 
    # 2. マウント設定を追加した場合、コンテナを再起動
-   docker-compose down
-   docker-compose up -d
+   make dev-down
+   make dev-up
    
    # 3. マイグレーションを再実行
-   docker-compose exec backend poetry run alembic upgrade head
+   make dev-migrate
    ```
 
 ## カスケード削除問題の解決
@@ -244,10 +244,11 @@ except Exception as e:
 
    ```bash
    # 外部キー制約を確認
-   docker-compose exec db psql -U postgres -d capybara_chat -c "\d+ テーブル名"
+   make dev-db-constraints  # 開発環境
+   make prod-db-constraints # 本番環境
    
    # 必要に応じてマイグレーションを作成
-   docker-compose exec backend poetry run alembic revision --autogenerate -m "説明"
+   docker compose exec backend poetry run alembic revision --autogenerate -m "説明"
    ```
 
 3. **マイグレーションファイルを手動で調整**:
@@ -257,14 +258,126 @@ except Exception as e:
 4. **マイグレーションを適用**:
 
    ```bash
-   docker-compose exec backend poetry run alembic upgrade head
+   make dev-migrate   # 開発環境
+   make prod-migrate  # 本番環境（確認プロンプト付き）
    ```
 
 5. **アプリケーションを再起動**:
 
    ```bash
-   docker-compose restart backend
+   make dev-restart-backend   # 開発環境
+   make prod-restart-backend  # 本番環境
    ```
+
+### 本番環境でのマイグレーション適用手順
+
+**注意**: 本開発で作成された以下のマイグレーションは本番環境でも適用が必要です：
+
+- `ddb6fc93d72b` - カスケード削除制約の追加
+- `cc12785e15bb` - token_usage session_id制約の修正
+
+#### 1. 事前準備
+
+```bash
+# 1. データベースのバックアップを取得
+make prod-backup-db
+
+# 2. 現在のマイグレーション状態を確認
+make prod-migration-status
+
+# 3. 適用予定のマイグレーション履歴を確認
+make prod-migration-history
+```
+
+#### 2. メンテナンスモード（推奨）
+
+```bash
+# フロントエンドとCloudflare Tunnelを停止してユーザーアクセスを制限
+make prod-maintenance-start
+```
+
+#### 3. マイグレーション適用
+
+```bash
+# マイグレーションを適用（確認プロンプト付き）
+make prod-migrate
+
+# 手動で段階的に適用したい場合
+docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade ddb6fc93d72b
+docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade cc12785e15bb
+```
+
+#### 4. 動作確認
+
+```bash
+# 1. バックエンドサービスを再起動
+make prod-restart-backend
+
+# 2. データベース制約の確認
+make prod-db-constraints
+
+# 3. ログでエラーがないことを確認
+make prod-logs-backend
+```
+
+#### 5. サービス復旧
+
+```bash
+# フロントエンドとCloudflare Tunnelを再開
+make prod-maintenance-end
+
+# 全サービスの状態確認
+docker compose -f docker-compose.prod.yml ps
+```
+
+#### 6. 機能テスト
+
+```bash
+# ユーザー削除機能のテスト（管理者権限で）
+# 1. 管理者でログイン
+# 2. テストユーザーを作成
+# 3. そのユーザーの削除を実行
+# 4. エラーが発生しないことを確認
+# 5. 関連データが正しく削除されていることを確認
+```
+
+#### ロールバック手順（問題発生時）
+
+```bash
+# 1. 問題のあるマイグレーションを特定
+make prod-migration-status
+
+# 2. 前のマイグレーションまでダウングレード
+docker compose -f docker-compose.prod.yml exec backend poetry run alembic downgrade 43b943c73c86
+
+# 3. バックアップからデータベースを復元（重大な問題の場合）
+make prod-restore-db BACKUP_FILE=backups/prod_backup_20250622_123456.sql
+
+# 4. サービスを再起動
+make prod-restart-backend
+```
+
+#### 本番環境マイグレーションのベストプラクティス
+
+1. **バックアップの必須性**:
+   - マイグレーション前には必ずデータベースの完全バックアップを取得
+   - 復元テストも事前に実施しておく
+
+2. **段階的適用**:
+   - 複数のマイグレーションがある場合は一つずつ適用
+   - 各段階で動作確認を実施
+
+3. **メンテナンス時間の確保**:
+   - ユーザーへの事前通知
+   - 十分な作業時間を確保（ロールバック時間も含む）
+
+4. **監視とログ確認**:
+   - マイグレーション中は継続的にログを監視
+   - エラーが発生した場合は即座に停止してロールバック
+
+5. **事前テスト**:
+   - 本番相当の環境でマイグレーションをテスト実行
+   - データ量が多い場合は実行時間を事前測定
 
 ### 学んだ教訓
 
