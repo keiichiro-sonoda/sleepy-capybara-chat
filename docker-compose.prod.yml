@@ -3,6 +3,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        # ビルド時に環境変数をARGとして渡す
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+        - NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME:-Sleepy Capybara Chat}
     env_file:
       - .env.prod
     environment:
@@ -36,12 +40,13 @@ services:
       - ollama_data:/root/.ollama
     env_file:
       - .env.prod
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: [gpu]
+    # 本番環境ではGPUを使用しない
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           capabilities: [gpu]
     restart: unless-stopped
 
   db:
