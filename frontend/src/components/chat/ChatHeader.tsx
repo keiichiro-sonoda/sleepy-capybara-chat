@@ -33,8 +33,7 @@ const ChatHeader = ({
   availableModels,
   isThinkingModeEnabled,
   onToggleThinkingMode,
-  onToggleSidebar,
-  isSidebarOpen
+  onToggleSidebar
 }: ChatHeaderProps) => {
   const router = useRouter();
 
@@ -95,7 +94,7 @@ const ChatHeader = ({
                 )}
               </select>
             </div>
-            
+
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-300">ストリーミング</span>
@@ -108,7 +107,7 @@ const ChatHeader = ({
                   />
                 </button>
               </div>
-              
+
               {showThinkingModeSwitch && onToggleThinkingMode && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-300">思考モード</span>
@@ -125,7 +124,7 @@ const ChatHeader = ({
               )}
             </div>
           </div>
-          
+
           {/* Mobile Action Buttons Row */}
           {user && (
             <div className="flex items-center justify-center space-x-2 pt-2 border-t border-gray-700">

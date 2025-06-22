@@ -238,6 +238,257 @@ docker-compose exec backend env | grep FRONTEND_URL
    - シークレット情報の安全な保管
    - 環境変数の動作確認
 
+## 本番環境での環境変数設定ガイド
+
+### 🚀 本番環境で必須の環境変数
+
+#### **ルート（`.env`）**
+
+```bash
+# === 必須設定 ===
+
+# PostgreSQL設定
+POSTGRES_USER=your_production_user           # 本番用の専用ユーザー
+POSTGRES_PASSWORD=your_strong_password_here  # 強力なパスワード（16文字以上推奨）
+POSTGRES_DB=sleepy_capybara_production      # 本番用DB名
+POSTGRES_HOST=db                            # Dockerコンテナ名
+POSTGRES_PORT=5432
+
+# サービスURL設定
+BACKEND_URL=http://backend:8000
+FRONTEND_URL=https://your-tunnel-domain.com  # Cloudflare Tunnelのドメイン
+
+# Ollama設定
+OLLAMA_API_BASE_URL=http://ollama:11434
+
+# JWT設定
+JWT_SECRET_KEY=your_very_long_random_secret_key_here  # 64文字以上推奨
+
+# Cloudflare Tunnel
+CLOUDFLARE_TUNNEL_TOKEN=your_production_tunnel_token
+```
+
+#### **バックエンド（`backend/.env`）**
+
+```bash
+# === 必須設定 ===
+
+# アプリケーション設定
+PROJECT_NAME=Sleepy Capybara Chat
+API_V1_STR=/api/v1
+
+# JWT設定（ルートと同じ値を使用）
+JWT_SECRET_KEY=your_very_long_random_secret_key_here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# 管理者アカウント
+ADMIN_EMAIL=admin@your-domain.com           # 実際のメールアドレス
+ADMIN_PASSWORD=your_very_strong_admin_password  # 強力なパスワード
+
+# メール設定
+EMAIL_SERVICE=gmail                         # "gmail" 推奨
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-16-digit-app-password
+
+# フロントエンドURL（メール認証リンク用）
+FRONTEND_URL=https://your-tunnel-domain.com
+
+# ログレベル設定
+LOG_LEVEL=INFO                              # 本番では INFO または WARNING
+
+# CORS設定
+CORS_ORIGINS='["https://your-tunnel-domain.com"]'
+
+# === オプション設定 ===
+OPENAI_API_KEY=your_openai_api_key         # OpenAI使用時のみ
+```
+
+#### **フロントエンド（`frontend/.env.local`）**
+
+```bash
+# === 必須設定 ===
+
+# バックエンドAPI設定
+NEXT_PUBLIC_API_URL=https://api.your-tunnel-domain.com/api
+
+# アプリケーション設定
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+```
+
+### ❌ 本番環境で不要な環境変数
+
+#### **開発専用（削除または未設定）**
+
+```bash
+# === 開発環境専用（本番では不要） ===
+
+# ポート設定（nginxを使わないため）
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+NGINX_PORT=80
+
+# MailHog設定（開発用メールテスト環境）
+MAILHOG_PORT=8025
+MAILHOG_SMTP_PORT=1025
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_SERVER=mailhog
+MAIL_PORT=1025
+MAIL_FROM=noreply@example.com
+MAIL_SSL_TLS=False
+MAIL_STARTTLS=False
+
+# SendGrid設定（廃止済み）
+SENDGRID_API_KEY=...
+MAIL_FROM=no-reply@sleepycapybara.org
+
+# 開発用ファイル監視設定
+CHOKIDAR_USEPOLLING=true
+WATCHPACK_POLLING=true
+```
+
+### 🛡️ データベース関連のベストプラクティス
+
+#### **1. パスワードセキュリティ**
+
+```bash
+# ❌ 弱いパスワード
+POSTGRES_PASSWORD=admin123
+
+# ✅ 強力なパスワード
+POSTGRES_PASSWORD=Kp9#mN2$vR8@qL5%wE1!xB4^zA7&sF3*
+```
+
+**推奨事項:**
+
+- 最低16文字以上
+- 英数字 + 特殊文字の組み合わせ
+- 辞書に載っていない文字列
+- パスワード生成ツールの使用
+
+#### **2. 環境変数の統一**
+
+```bash
+# ❌ 重複定義（混乱の原因）
+# ルート .env
+POSTGRES_PASSWORD=password1
+# バックエンド .env
+POSTGRES_PASSWORD=password2
+
+# ✅ 統一された定義
+# ルート .env のみで定義し、バックエンドでは参照
+```
+
+#### **3. 接続情報の管理**
+
+```bash
+# ✅ 本番環境での推奨設定
+POSTGRES_USER=sleepy_production_user    # 専用ユーザー
+POSTGRES_DB=sleepy_capybara_production  # 環境別DB名
+POSTGRES_HOST=db                        # Docker環境
+POSTGRES_PORT=5432
+
+# 接続URL形式（オプション）
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+```
+
+#### **4. セキュリティ強化設定**
+
+```bash
+# PostgreSQL追加設定（docker-compose.yml）
+environment:
+  POSTGRES_INITDB_ARGS: "--auth-host=md5"
+  POSTGRES_HOST_AUTH_METHOD: "md5"
+```
+
+#### **5. バックアップとリストア**
+
+```bash
+# バックアップスクリプト例
+#!/bin/bash
+DATE=$(date +%Y%m%d_%H%M%S)
+docker-compose exec -T db pg_dump -U ${POSTGRES_USER} ${POSTGRES_DB} > backup_${DATE}.sql
+
+# リストアスクリプト例
+#!/bin/bash
+docker-compose exec -T db psql -U ${POSTGRES_USER} ${POSTGRES_DB} < backup_file.sql
+```
+
+### 🔧 環境変数の整理・統一
+
+#### **重複削除と統一**
+
+現在の設定で以下の重複があります：
+
+1. **JWT_SECRET_KEY**: ルートとバックエンドで重複
+   - **解決策**: ルートのみで定義し、バックエンドは参照
+
+2. **FRONTEND_URL**: ルートとバックエンドで異なる値
+   - **解決策**: 用途に応じて適切に設定
+
+3. **データベース接続情報**: 各所で重複
+   - **解決策**: ルートで一元管理
+
+#### **推奨構成**
+
+```bash
+# === ルート .env ===
+# データベース（一元管理）
+POSTGRES_USER=sleepy_production_user
+POSTGRES_PASSWORD=your_strong_password
+POSTGRES_DB=sleepy_capybara_production
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+# JWT（一元管理）
+JWT_SECRET_KEY=your_64_character_secret_key
+
+# URL設定
+FRONTEND_URL=https://chat.your-domain.com
+BACKEND_URL=http://backend:8000
+
+# Cloudflare
+CLOUDFLARE_TUNNEL_TOKEN=your_token
+
+# === バックエンド .env ===
+# アプリケーション固有の設定のみ
+PROJECT_NAME=Sleepy Capybara Chat
+API_V1_STR=/api/v1
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# 管理者設定
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=your_admin_password
+
+# メール設定
+EMAIL_SERVICE=gmail
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your_app_password
+
+# その他
+LOG_LEVEL=INFO
+CORS_ORIGINS='["https://chat.your-domain.com"]'
+
+# === フロントエンド .env.local ===
+# フロントエンド固有の設定のみ
+NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+```
+
+### 📋 本番環境デプロイ前チェックリスト
+
+- [ ] 強力なパスワードの設定（DB、管理者）
+- [ ] JWT_SECRET_KEYの生成（64文字以上）
+- [ ] Cloudflare Tunnelトークンの取得
+- [ ] Gmail SMTP設定（アプリパスワード）
+- [ ] CORS_ORIGINSの本番ドメイン設定
+- [ ] LOG_LEVELの適切な設定
+- [ ] 開発用環境変数の削除
+- [ ] 環境変数の重複チェック
+- [ ] バックアップスクリプトの準備
+
 ## 現状からの移行計画
 
 1. プロジェクトルートに`.env.example`を作成し、全ての必要な環境変数を記載

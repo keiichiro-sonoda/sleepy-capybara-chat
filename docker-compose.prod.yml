@@ -1,41 +1,21 @@
 services:
-  # nginx:
-  #   image: nginx:alpine
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-  #   depends_on:
-  #     - frontend
-  #     - backend
-
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-      - ./frontend/.env.local:/app/.env.local
-    ports:
-      - "3000:3000"
+      dockerfile: Dockerfile.prod
+      args:
+        - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
+        - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
+    restart: unless-stopped
+    # 本番では開発用ボリュームマウントを削除
+    # volumes:
+    #   - ./frontend:/app  # 開発用のみ
 
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/app:/src/app
-      - ./backend/tests:/src/tests
-      - ./backend/migrations:/src/migrations
-      - ./.env:/src/.env
-    user: "1000:1000"  # appuserのUID:GIDを指定
+      dockerfile: Dockerfile.prod
     environment:
-      # ルートの.envから統一された環境変数を注入
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -46,12 +26,14 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS}
       - OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL}
     env_file:
-      # バックエンド固有の設定は引き続きenv_fileで読み込み
       - ./backend/.env
+    restart: unless-stopped
+    # 本番では開発用ボリュームマウントを削除
+    # volumes:
+    #   - ./backend/app:/src/app  # 開発用のみ
     depends_on:
       - db
       - ollama
-      - mailhog
 
   ollama:
     image: ollama/ollama:latest
@@ -63,14 +45,11 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
-    restart: always
+    restart: unless-stopped
 
   db:
     image: postgres:15
-    ports:
-      - "5432:5432"
     environment:
-      # ルートの.envから統一
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -78,15 +57,18 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: always
+    restart: unless-stopped
+    # 本番環境ではポートを公開しない（セキュリティ向上）
+    # ports:
+    #   - "5432:5432"
 
-  mailhog:
-    image: mailhog/mailhog
-    ports:
-      - "1025:1025"  # SMTP port
-      - "8025:8025"  # Web UI (ブラウザでメール確認可能)
+  # 本番環境ではmailhogを削除（Gmail SMTPを使用）
+  # mailhog:
+  #   image: mailhog/mailhog
+  #   ports:
+  #     - "1025:1025"
+  #     - "8025:8025"
 
-  # Cloudflare Tunnel サービス
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped

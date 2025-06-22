@@ -56,7 +56,8 @@ export default function TokenManagementPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       }
-      if ((err as any)?.response?.status === 401 || (err as any)?.message?.includes('認証')) {
+      if ((err as { response?: { status?: number }; message?: string })?.response?.status === 401 ||
+        (err as { response?: { status?: number }; message?: string })?.message?.includes('認証')) {
         router.push('/auth/login');
         return;
       }

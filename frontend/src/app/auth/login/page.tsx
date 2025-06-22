@@ -27,11 +27,12 @@ export default function LoginPage() {
 
       // チャットページにリダイレクト
       router.push('/chat');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      if (error.response) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response: { data: { detail: unknown } } };
         // APIからのエラーメッセージを抽出
-        const errorDetail = error.response.data.detail;
+        const errorDetail = axiosError.response.data.detail;
 
         // 配列形式のエラーメッセージをわかりやすく表示
         if (Array.isArray(errorDetail)) {

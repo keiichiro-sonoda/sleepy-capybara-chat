@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger, // モーダルを開くトリガーとして使う場合
   DialogClose,   // 明示的に閉じるボタン用
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -123,10 +122,10 @@ export function EditTokenLimitsDialog({
       // 空文字列の場合は0として扱う（表示は空文字列のまま）
       const stringValue = value as string;
       if (stringValue === '') {
-        (limitToUpdate as any)[field] = '';
+        (limitToUpdate as Record<string, unknown>)[field] = '';
       } else {
         const numValue = parseInt(stringValue, 10);
-        (limitToUpdate as any)[field] = isNaN(numValue) ? 0 : numValue;
+        (limitToUpdate as Record<string, unknown>)[field] = isNaN(numValue) ? 0 : numValue;
       }
     } else if (field === 'model_name') {
       // モデル名が変更された場合、対応するmodel_idのみ設定
@@ -136,7 +135,7 @@ export function EditTokenLimitsDialog({
         // model_nameはAPI送信時に除外されるため、ここでは設定しない
       }
     } else {
-      (limitToUpdate as any)[field] = value;
+      (limitToUpdate as Record<string, unknown>)[field] = value;
     }
     updatedLimits[index] = limitToUpdate;
     setCurrentLimits(updatedLimits);
@@ -151,9 +150,9 @@ export function EditTokenLimitsDialog({
     const limitToUpdate = { ...updatedLimits[index] } as Partial<TokenLimit>;
 
     // 空文字列の場合は適切なデフォルト値を設定
-    const currentValue = (limitToUpdate as any)[field];
+    const currentValue = (limitToUpdate as Record<string, unknown>)[field];
     if (currentValue === '' || currentValue === null || currentValue === undefined) {
-      (limitToUpdate as any)[field] = field === 'period_value' ? 1 : 0;
+      (limitToUpdate as Record<string, unknown>)[field] = field === 'period_value' ? 1 : 0;
       updatedLimits[index] = limitToUpdate;
       setCurrentLimits(updatedLimits);
     }
@@ -182,8 +181,9 @@ export function EditTokenLimitsDialog({
     try {
       for (const limit of currentLimits) {
         if (limit.id) { // IDがあれば既存の制限なので更新
-          // user_id を除いた更新データを準備
-          const { id, user_id, ...updateData } = limit;
+          // user_id とmodel_nameを除いた更新データを準備
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { model_name: _, ...updateData } = limit;
           if (Object.keys(updateData).length > 0) { // 何か変更がある場合のみ更新
             await updateTokenLimit(limit.id, updateData as Partial<Omit<TokenLimit, 'id' | 'user_id'>>);
           }
@@ -207,7 +207,7 @@ export function EditTokenLimitsDialog({
         <DialogHeader>
           <DialogTitle>Edit Token Limits for {user.email}</DialogTitle>
           <DialogDescription>
-            Manage token usage limits for this user. Click save when you're done.
+            Manage token usage limits for this user. Click save when you&apos;re done.
             {modelsLoading && <span className="text-xs text-muted-foreground mt-1 block">Loading available models...</span>}
             {modelsError && <span className="text-xs text-red-500 mt-1 block">Error loading models: {modelsError}</span>}
           </DialogDescription>

@@ -12,8 +12,7 @@ type ChatInputProps = {
 const ChatInput = ({
   onSendMessage,
   isLoading,
-  disabled,
-  isStreaming = true
+  disabled = true
 }: ChatInputProps) => {
   const [message, setMessage] = useState('');
 
