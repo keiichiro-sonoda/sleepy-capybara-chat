@@ -164,7 +164,44 @@ sleepy-capybara-chat/
 
 ## よくある詰まりポイント
 
-### 1. Next.js環境変数がbuild argsで設定できない
+### 1. 本番環境でNext.js環境変数が反映されない（重要）
+
+**症状**: 本番環境で`NEXT_PUBLIC_API_URL`等が認識されず、APIコールが404エラーになる
+
+**原因**: Docker Composeの変数展開と環境変数ファイルの配置場所の問題
+
+**詳細**:
+
+- 開発環境：`next dev`でランタイムに環境変数を読み込み
+- 本番環境：`next build`でビルド時に環境変数を埋め込み
+- `build.args`で使用される変数はDocker Composeが変数展開する際にルートの`.env`から読み取る
+
+**解決方法**:
+
+```yaml
+# docker-compose.prod.yml
+services:
+  frontend:
+    build:
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}  # ← この変数展開はルート.envから
+        - NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME}
+    env_file:
+      - .env.prod  # ← ここの変数は関係ない
+```
+
+```bash
+# ✅ ルート .env に配置（本番環境）
+NEXT_PUBLIC_API_URL=https://chat.sleepycapybara.org/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+
+# ❌ .env.prod に配置しても無効
+# Docker Composeが変数展開時に読み取れない
+```
+
+**教訓**: Docker Composeが`${}`で参照する変数は必ずルートの`.env`に配置する
+
+### 2. Next.js環境変数がbuild argsで設定できない（開発環境）
 
 **症状**: `NEXT_PUBLIC_*`環境変数がフロントエンドで認識されない
 
@@ -173,7 +210,7 @@ sleepy-capybara-chat/
 **解決方法**:
 
 ```yaml
-# ✅ 現在の推奨パターン
+# ✅ 開発環境の推奨パターン
 services:
   frontend:
     env_file:
@@ -191,7 +228,25 @@ NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
 
 **教訓**: `NEXT_PUBLIC_*`変数は`.env`ファイルに設定し、`env_file`で読み込む
 
-### 2. メールリンクのドメインが間違っている
+### 3. Cloudflare Tunnelの環境変数が反映されない
+
+**症状**: `CLOUDFLARE_TUNNEL_TOKEN environment variable is required`エラー
+
+**原因**: Docker Composeの変数展開で`CLOUDFLARE_TUNNEL_TOKEN`が見つからない
+
+**解決方法**:
+
+```bash
+# ✅ ルート .env に配置（本番環境）
+CLOUDFLARE_TUNNEL_TOKEN=your_production_tunnel_token
+
+# ❌ .env.prod や backend/.env に配置しても無効
+# Docker Composeが ${CLOUDFLARE_TUNNEL_TOKEN:?...} を展開時に読み取れない
+```
+
+**教訓**: `docker-compose.yml`で`${}`参照される変数はルートの`.env`必須
+
+### 4. メールリンクのドメインが間違っている
 
 **症状**: パスワードリセットメールのリンクが `localhost:3000` になってしまう
 
@@ -200,7 +255,7 @@ NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
 **解決方法**:
 
 ```bash
-# backend/.env ファイルで設定
+# backend/.env.prod ファイルで設定
 FRONTEND_URL=https://your-cloudflare-tunnel-domain.com
 ```
 
@@ -300,11 +355,12 @@ FRONTEND_URL=https://your-tunnel-domain.com  # Cloudflare Tunnelのドメイン
 # Ollama設定
 OLLAMA_API_BASE_URL=http://ollama:11434
 
-# JWT設定
-JWT_SECRET_KEY=your_very_long_random_secret_key_here  # 64文字以上推奨
-
-# Cloudflare Tunnel
+# Cloudflare Tunnel（Docker Composeの変数展開で使用）
 CLOUDFLARE_TUNNEL_TOKEN=your_production_tunnel_token
+
+# Next.js環境変数（Docker Composeのbuild.argsで使用）
+NEXT_PUBLIC_API_URL=https://your-tunnel-domain.com/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
 ```
 
 #### **バックエンド（`backend/.env`）**
@@ -316,8 +372,8 @@ CLOUDFLARE_TUNNEL_TOKEN=your_production_tunnel_token
 PROJECT_NAME=Sleepy Capybara Chat
 API_V1_STR=/api/v1
 
-# JWT設定（ルートと同じ値を使用）
-JWT_SECRET_KEY=your_very_long_random_secret_key_here
+# JWT設定
+JWT_SECRET_KEY=your_very_long_random_secret_key_here  # 64文字以上推奨
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
@@ -346,13 +402,10 @@ OPENAI_API_KEY=your_openai_api_key         # OpenAI使用時のみ
 #### **フロントエンド（`frontend/.env.local`）**
 
 ```bash
-# === 必須設定 ===
+# === 本番環境では不要 ===
+# NEXT_PUBLIC_*変数はルートの.envで定義（Docker Composeのbuild.argsで使用）
 
-# バックエンドAPI設定
-NEXT_PUBLIC_API_URL=https://api.your-tunnel-domain.com/api
-
-# アプリケーション設定
-NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+# 開発環境のみで使用する追加設定があればここに記述
 ```
 
 ### ❌ 本番環境で不要な環境変数
@@ -456,45 +509,48 @@ docker-compose exec -T db psql -U ${POSTGRES_USER} ${POSTGRES_DB} < backup_file.
 
 ### 🔧 環境変数の整理・統一
 
-#### **重複削除と統一**
+#### **重要：Docker Composeの変数展開**
 
-現在の設定で以下の重複があります：
+本番環境では、以下の環境変数は**ルートの`.env`ファイルに配置する必要があります**：
 
-1. **JWT_SECRET_KEY**: ルートとバックエンドで重複
-   - **解決策**: ルートのみで定義し、バックエンドは参照
+1. **Docker Composeが直接参照する変数**：
+   - `CLOUDFLARE_TUNNEL_TOKEN`: `${CLOUDFLARE_TUNNEL_TOKEN:?...}`で参照
+   - `POSTGRES_*`: `${POSTGRES_USER}`等で参照
 
-2. **FRONTEND_URL**: ルートとバックエンドで異なる値
-   - **解決策**: 用途に応じて適切に設定
+2. **build.argsで使用される変数**：
+   - `NEXT_PUBLIC_API_URL`: `${NEXT_PUBLIC_API_URL}`で参照
+   - `NEXT_PUBLIC_APP_NAME`: `${NEXT_PUBLIC_APP_NAME}`で参照
 
-3. **データベース接続情報**: 各所で重複
-   - **解決策**: ルートで一元管理
-
-#### **推奨構成**
+#### **推奨構成（実動作確認済み）**
 
 ```bash
-# === ルート .env ===
-# データベース（一元管理）
+# === ルート .env（本番環境）===
+# データベース設定
 POSTGRES_USER=sleepy_production_user
 POSTGRES_PASSWORD=your_strong_password
 POSTGRES_DB=sleepy_capybara_production
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
 
-# JWT（一元管理）
-JWT_SECRET_KEY=your_64_character_secret_key
-
 # URL設定
 FRONTEND_URL=https://chat.your-domain.com
 
-# Cloudflare
+# Cloudflare Tunnel（Docker Composeで必須）
 CLOUDFLARE_TUNNEL_TOKEN=your_token
 
-# === バックエンド .env ===
+# Next.js環境変数（build.argsで必須）
+NEXT_PUBLIC_API_URL=https://chat.your-domain.com/api
+NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+
+# === バックエンド .env.prod ===
 # アプリケーション固有の設定のみ
 PROJECT_NAME=Sleepy Capybara Chat
 API_V1_STR=/api/v1
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# JWT設定
+JWT_SECRET_KEY=your_64_character_secret_key
 
 # 管理者設定
 ADMIN_EMAIL=admin@your-domain.com
@@ -509,10 +565,8 @@ GMAIL_APP_PASSWORD=your_app_password
 LOG_LEVEL=INFO
 CORS_ORIGINS='["https://chat.your-domain.com"]'
 
-# === フロントエンド .env.local ===
-# フロントエンド固有の設定のみ
-NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
-NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
+# === フロントエンド（本番環境では追加設定不要）===
+# NEXT_PUBLIC_*変数はルート.envで定義済み
 ```
 
 ### 📋 本番環境デプロイ前チェックリスト
@@ -523,8 +577,11 @@ NEXT_PUBLIC_APP_NAME=Sleepy Capybara Chat
 - [ ] Gmail SMTP設定（アプリパスワード）
 - [ ] CORS_ORIGINSの本番ドメイン設定
 - [ ] LOG_LEVELの適切な設定
-- [ ] 開発用環境変数の削除
-- [ ] 環境変数の重複チェック
+- [ ] **重要**: Docker Compose変数展開用の環境変数をルート`.env`に配置
+  - [ ] `CLOUDFLARE_TUNNEL_TOKEN`
+  - [ ] `NEXT_PUBLIC_API_URL`
+  - [ ] `NEXT_PUBLIC_APP_NAME`
+  - [ ] `POSTGRES_*`系の変数
 - [ ] バックアップスクリプトの準備
 
 ## 現状からの移行計画

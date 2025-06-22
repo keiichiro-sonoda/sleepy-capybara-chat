@@ -61,7 +61,8 @@ docker compose up --build
 ### 4. Ollamaのセットアップ
 
 チャット機能を使用するには、Ollamaコンテナ内に言語モデルをインストールする必要があります。
-以下のコマンドを実行して、必要なモデルをダウンロードしてください：
+
+#### 開発環境
 
 ```bash
 # 利用可能なモデルの一覧を表示
@@ -69,12 +70,33 @@ docker compose exec ollama ollama list
 
 # モデルのダウンロード（例：llama3）
 docker compose exec ollama ollama pull llama3
+
+# または Makefile コマンドを使用
+make dev-models        # 利用可能なモデル一覧
+make dev-pull-llama3   # llama3をダウンロード
+make dev-pull-model MODEL=llama3.1   # 任意のモデルをダウンロード
+```
+
+#### 本番環境
+
+```bash
+# 利用可能なモデルの一覧を表示
+docker compose -f docker-compose.prod.yml exec ollama ollama list
+
+# モデルのダウンロード（例：llama3）
+docker compose -f docker-compose.prod.yml exec ollama ollama pull llama3
+
+# または Makefile コマンドを使用
+make prod-models        # 利用可能なモデル一覧
+make prod-pull-llama3   # llama3をダウンロード
+make prod-pull-model MODEL=llama3.1   # 任意のモデルをダウンロード
 ```
 
 注意：
 
 - モデルのダウンロードには時間がかかる場合があります（モデルサイズによって数分から数十分）
 - 初回のチャットリクエスト時は、モデルのロードに時間がかかる場合があります
+- 本番環境では十分なディスク容量があることを確認してください
 
 ### 5. 開発サーバーの起動
 
