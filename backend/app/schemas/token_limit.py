@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
-from app.schemas.enums import MetricType, PeriodUnit, AIModelId
+
+from app.schemas.enums import AIModelId, MetricType, PeriodUnit
 
 
 class TokenLimitBase(BaseModel):

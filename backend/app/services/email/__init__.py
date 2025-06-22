@@ -1,9 +1,11 @@
+import logging
+
 from app.core.config import get_settings
+
+from .base import EmailService
+from .gmail import GmailService
 from .mailhog import MailHogService
 from .sendgrid import SendGridService
-from .gmail import GmailService
-from .base import EmailService
-import logging
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

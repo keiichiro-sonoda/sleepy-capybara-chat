@@ -1,18 +1,21 @@
-from sendgrid import SendGridAPIClient  # type: ignore
-from sendgrid.helpers.mail import (  # type: ignore
-    Mail,
-    Email,
-    To,
-    TrackingSettings,
-    ClickTracking,
-    OpenTracking,
-    SubscriptionTracking,
-)
-from app.core.config import get_settings
-from .base import EmailService
 import logging
 from pathlib import Path
+
 from jinja2 import Template
+from sendgrid import SendGridAPIClient  # type: ignore
+from sendgrid.helpers.mail import Mail  # type: ignore
+from sendgrid.helpers.mail import (
+    ClickTracking,
+    Email,
+    OpenTracking,
+    SubscriptionTracking,
+    To,
+    TrackingSettings,
+)
+
+from app.core.config import get_settings
+
+from .base import EmailService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -53,7 +56,8 @@ class SendGridService(EmailService):
             )
             response = self.sg.send(message)
             logger.info(
-                f"Verification email sent to {email}, status code: {response.status_code}"
+                f"Verification email sent to {email}, "
+                f"status code: {response.status_code}"
             )
         except Exception as e:
             logger.error(f"Failed to send verification email to {email}: {str(e)}")
@@ -81,7 +85,8 @@ class SendGridService(EmailService):
             )
             response = self.sg.send(message)
             logger.info(
-                f"Password reset email sent to {email}, status code: {response.status_code}"
+                f"Password reset email sent to {email}, "
+                f"status code: {response.status_code}"
             )
         except Exception as e:
             logger.error(f"Failed to send password reset email to {email}: {str(e)}")

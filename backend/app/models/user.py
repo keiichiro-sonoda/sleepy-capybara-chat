@@ -1,6 +1,8 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Integer, String, DateTime, func
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base
 
 
@@ -33,11 +35,20 @@ class User(Base):
 
     # リレーションシップ
     chat_sessions = relationship(
-        "ChatSession", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+        "ChatSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     token_limits = relationship(
-        "TokenLimit", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+        "TokenLimit",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     token_usage = relationship(
-        "TokenUsage", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+        "TokenUsage",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

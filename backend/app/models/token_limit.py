@@ -1,12 +1,9 @@
-from sqlalchemy import (
-    Integer,
-    Enum as SQLAlchemyEnum,
-    ForeignKey,
-    UniqueConstraint,
-)
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base
-from app.schemas.enums import MetricType, PeriodUnit, AIModelId
+from app.schemas.enums import AIModelId, MetricType, PeriodUnit
 
 
 class TokenLimit(Base):

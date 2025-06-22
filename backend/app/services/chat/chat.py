@@ -1,12 +1,12 @@
 import logging
-from app.core.config import get_settings
 from typing import Any, AsyncGenerator, Tuple
 
+from app.core.config import get_settings
+from app.schemas.chat import AVAILABLE_MODELS
+from app.schemas.enums import AIModelId
 from app.services.chat.base import ModelProvider
 from app.services.chat.ollama import OllamaProvider
 from app.services.chat.openai import OpenAIProvider
-from app.schemas.chat import AVAILABLE_MODELS
-from app.schemas.enums import AIModelId
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -93,7 +93,8 @@ class ChatService:
             model_name.value
         )  # Pass .value
         logger.debug(
-            f"Using provider: {provider_name}, model: {actual_model}, stream: {stream}, thinking_mode: {thinking_mode}"
+            f"Using provider: {provider_name}, model: {actual_model}, "
+            f"stream: {stream}, thinking_mode: {thinking_mode}"
         )
 
         thinking_mode_support = ChatService.get_thinking_mode_support(

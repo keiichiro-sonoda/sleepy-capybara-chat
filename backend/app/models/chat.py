@@ -1,14 +1,9 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    DateTime,
-    ForeignKey,
-    Enum as SQLAlchemyEnum,
-)
+from sqlalchemy import Column, DateTime
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.models.base import Base
 from app.schemas.enums import AIModelId
 
@@ -23,7 +18,12 @@ class ChatSession(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # リレーションシップ
-    messages = relationship("Message", back_populates="chat_session", cascade="all, delete-orphan", passive_deletes=True)
+    messages = relationship(
+        "Message",
+        back_populates="chat_session",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     user = relationship("User", back_populates="chat_sessions")
 
 

@@ -1,13 +1,14 @@
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
-from sqlalchemy import ForeignKey, Integer, String, DateTime, func
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.user import User
     from app.models.chat import ChatSession
+    from app.models.user import User
 
 
 class TokenUsage(Base):

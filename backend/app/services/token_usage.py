@@ -1,13 +1,14 @@
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.token_limit import PeriodUnit, TokenLimit
 from app.models.token_usage import TokenUsage
-from app.models.token_limit import TokenLimit, PeriodUnit
-from app.schemas.token_usage import TokenUsageByModel
 from app.schemas.chat import AVAILABLE_MODELS
 from app.schemas.enums import AIModelId
+from app.schemas.token_usage import TokenUsageByModel
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,8 @@ class TokenUsageService:
             if usage >= limit_value:
                 return (
                     False,
-                    f"Default token limit exceeded for {period_value} {period_unit.value}(s)",
+                    f"Default token limit exceeded for {period_value} "
+                    f"{period_unit.value}(s)",
                 )
             return True, "OK"
 
@@ -159,7 +161,8 @@ class TokenUsageService:
             if usage >= limit.limit_value:
                 return (
                     False,
-                    f"Token limit exceeded for {limit.period_value} {limit.period_unit.value}(s)",
+                    f"Token limit exceeded for {limit.period_value} "
+                    f"{limit.period_unit.value}(s)",
                 )
 
         return True, "OK"

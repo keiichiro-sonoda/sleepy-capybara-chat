@@ -1,6 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, ConfigDict
-from app.schemas.token_limit import TokenLimit, TokenLimitWithModelName
+
+from pydantic import BaseModel, ConfigDict, EmailStr
+
+from app.schemas.token_limit import TokenLimitWithModelName
 
 
 class UserBase(BaseModel):

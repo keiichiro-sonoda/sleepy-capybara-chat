@@ -1,18 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.db.session import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.core.security import get_current_user
-from app.services.token_usage import TokenUsageService
-from app.schemas.token_usage import TokenUsageByModel
-from app.schemas.user import User
+from app.db.session import get_db
 from app.models.token_limit import TokenLimit as TokenLimitModel
 from app.models.token_usage import TokenUsage
-from app.schemas.enums import PeriodUnit
 from app.schemas.chat import AVAILABLE_MODELS
+from app.schemas.enums import PeriodUnit
+from app.schemas.token_usage import TokenUsageByModel
+from app.schemas.user import User
+from app.services.token_usage import TokenUsageService
 
 router = APIRouter()
 
@@ -113,7 +114,10 @@ async def get_my_token_limits_summary(
                     100, round((usage / limit.limit_value) * 100, 1)
                 ),
                 "is_custom_limit": True,
-                "period_description": f"{limit.period_value} {limit.period_unit.value}{'s' if limit.period_value > 1 else ''}",
+                "period_description": (
+                    f"{limit.period_value} {limit.period_unit.value}"
+                    f"{'s' if limit.period_value > 1 else ''}"
+                ),
             }
         )
 
@@ -155,7 +159,11 @@ async def get_my_token_limits_summary(
                         100, round((usage / model.default_limit_value) * 100, 1)
                     ),
                     "is_custom_limit": False,
-                    "period_description": f"{model.default_limit_period_value} {model.default_limit_period_unit.value}{'s' if model.default_limit_period_value > 1 else ''}",
+                    "period_description": (
+                        f"{model.default_limit_period_value} "
+                        f"{model.default_limit_period_unit.value}"
+                        f"{'s' if model.default_limit_period_value > 1 else ''}"
+                    ),
                 }
             )
 

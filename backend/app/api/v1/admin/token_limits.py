@@ -1,18 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import get_current_admin_user
 from app.db.session import get_db
-from app.models.user import User
 from app.models.token_limit import TokenLimit as TokenLimitModel
-from app.schemas.token_limit import (
-    TokenLimit,
-    TokenLimitCreate,
-    TokenLimitUpdate,
-)
-from app.schemas.user import UserWithTokenLimits
+from app.models.user import User
 from app.schemas.chat import AVAILABLE_MODELS
+from app.schemas.token_limit import TokenLimit, TokenLimitCreate, TokenLimitUpdate
+from app.schemas.user import UserWithTokenLimits
 
 router = APIRouter()
 
