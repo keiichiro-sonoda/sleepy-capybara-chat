@@ -1,9 +1,11 @@
 import pytest
 import sys
 import os
+from typing import Generator
 from unittest.mock import patch, AsyncMock
 from datetime import datetime, timezone
 from fastapi import status
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -12,7 +14,7 @@ from app.models.user import User
 
 
 @pytest.fixture
-def unverified_user(db: Session):
+def unverified_user(db: Session) -> Generator[User, None, None]:
     """Create an unverified user for testing."""
     user = User(
         email="test@example.com", hashed_password="hashed_password", is_verified=False
@@ -25,7 +27,7 @@ def unverified_user(db: Session):
 
 
 @pytest.fixture
-def verified_user(db: Session):
+def verified_user(db: Session) -> Generator[User, None, None]:
     """Create a verified user for testing."""
     user = User(
         email="verified@example.com",
@@ -42,8 +44,8 @@ def verified_user(db: Session):
 @pytest.mark.asyncio
 @patch("app.services.email.get_email_service")
 async def test_resend_confirmation_to_unverified_user(
-    mock_get_service, client, db: Session, unverified_user
-):
+    mock_get_service: AsyncMock, client: TestClient, db: Session, unverified_user: User
+) -> None:
     """Test resending confirmation to an unverified user."""
     mock_service = AsyncMock()
     mock_get_service.return_value = mock_service
@@ -60,6 +62,7 @@ async def test_resend_confirmation_to_unverified_user(
     mock_service.send_verification_email.assert_called_once()
 
     updated_user = db.query(User).filter(User.id == unverified_user.id).first()
+    assert updated_user is not None
     assert updated_user.verification_token is not None
     assert updated_user.verification_token_expires_at is not None
 
@@ -75,8 +78,8 @@ async def test_resend_confirmation_to_unverified_user(
 @pytest.mark.asyncio
 @patch("app.services.email.get_email_service")
 async def test_resend_confirmation_to_verified_user(
-    mock_get_service, client, verified_user
-):
+    mock_get_service: AsyncMock, client: TestClient, verified_user: User
+) -> None:
     """Test resending confirmation to an already verified user."""
     mock_service = AsyncMock()
     mock_get_service.return_value = mock_service
@@ -95,7 +98,7 @@ async def test_resend_confirmation_to_verified_user(
 
 @pytest.mark.asyncio
 @patch("app.services.email.get_email_service")
-async def test_resend_confirmation_to_nonexistent_user(mock_get_service, client):
+async def test_resend_confirmation_to_nonexistent_user(mock_get_service: AsyncMock, client: TestClient) -> None:
     """Test resending confirmation to a non-existent user."""
     mock_service = AsyncMock()
     mock_get_service.return_value = mock_service

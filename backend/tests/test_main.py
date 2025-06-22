@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy_utils import create_database, drop_database
+from sqlalchemy_utils import create_database, drop_database  # type: ignore
 
 from app.main import app
 from app.core.config import get_settings
@@ -15,7 +15,7 @@ TEST_DATABASE_URL = (
 )
 
 
-def setup_module(module):
+def setup_module(module: object) -> None:
     """テストモジュールのセットアップ"""
     # テスト用データベースの作成
     create_database(TEST_DATABASE_URL)
@@ -28,13 +28,13 @@ def setup_module(module):
     Base.metadata.create_all(bind=engine)
 
 
-def teardown_module(module):
+def teardown_module(module: object) -> None:
     """テストモジュールの後片付け"""
     # テスト用データベースの削除
     drop_database(TEST_DATABASE_URL)
 
 
-def test_read_root():
+def test_read_root() -> None:
     """ルートエンドポイントのテスト"""
     client = TestClient(app)
     response = client.get("/")
@@ -42,7 +42,7 @@ def test_read_root():
     assert response.json() == {"message": "Welcome to Sleepy Capybara Chat API"}
 
 
-def test_cors_headers():
+def test_cors_headers() -> None:
     """CORSヘッダーのテスト"""
     client = TestClient(app)
     
@@ -96,7 +96,7 @@ def test_cors_headers():
         print("✅ CORS設定は正しく設定されています（TestClientの制限によりヘッダーが表示されない可能性があります）")
 
 
-def test_api_v1_prefix():
+def test_api_v1_prefix() -> None:
     """APIバージョンプレフィックスのテスト"""
     client = TestClient(app)
     response = client.get("/api/v1/openapi.json")

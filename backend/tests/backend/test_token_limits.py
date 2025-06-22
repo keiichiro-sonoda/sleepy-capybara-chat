@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import patch
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -28,7 +29,7 @@ def test_user(db: Session) -> User:
 
 
 @pytest.fixture
-def test_model_config():
+def test_model_config() -> AIModel:
     """Mock model configuration for testing."""
     return AIModel(
         id=AIModelId.QWEN3_8B,
@@ -96,7 +97,7 @@ class TestTokenLimitRollingWindows:
     """Test rolling window calculations for different time periods."""
 
     @pytest.mark.asyncio
-    async def test_daily_rolling_window(self, db: Session, test_user: User):
+    async def test_daily_rolling_window(self, db: Session, test_user: User) -> None:
         """Test daily rolling window calculation."""
         now = datetime.now(timezone.utc)
         
@@ -118,7 +119,7 @@ class TestTokenLimitRollingWindows:
         assert reason == "OK"
 
     @pytest.mark.asyncio
-    async def test_hourly_rolling_window(self, db: Session, test_user: User):
+    async def test_hourly_rolling_window(self, db: Session, test_user: User) -> None:
         """Test hourly rolling window calculation."""
         now = datetime.now(timezone.utc)
         
@@ -138,7 +139,7 @@ class TestTokenLimitRollingWindows:
         assert "Token limit exceeded for 1 hour(s)" in reason
 
     @pytest.mark.asyncio
-    async def test_monthly_rolling_window(self, db: Session, test_user: User):
+    async def test_monthly_rolling_window(self, db: Session, test_user: User) -> None:
         """Test monthly rolling window calculation (30-day approximation)."""
         now = datetime.now(timezone.utc)
         
@@ -160,7 +161,7 @@ class TestTokenLimitRollingWindows:
         assert reason == "OK"
 
     @pytest.mark.asyncio
-    async def test_minute_rolling_window(self, db: Session, test_user: User):
+    async def test_minute_rolling_window(self, db: Session, test_user: User) -> None:
         """Test minute rolling window calculation."""
         now = datetime.now(timezone.utc)
         
@@ -180,7 +181,7 @@ class TestTokenLimitRollingWindows:
         assert reason == "OK"
 
     @pytest.mark.asyncio
-    async def test_multi_period_rolling_window(self, db: Session, test_user: User):
+    async def test_multi_period_rolling_window(self, db: Session, test_user: User) -> None:
         """Test rolling window with multiple period values."""
         now = datetime.now(timezone.utc)
         
@@ -206,7 +207,7 @@ class TestTokenLimitBreaches:
     """Test token limit breach scenarios."""
 
     @pytest.mark.asyncio
-    async def test_limit_breach_returns_false_with_message(self, db: Session, test_user: User):
+    async def test_limit_breach_returns_false_with_message(self, db: Session, test_user: User) -> None:
         """Test that exceeding limits returns False with proper message."""
         now = datetime.now(timezone.utc)
         
@@ -224,7 +225,7 @@ class TestTokenLimitBreaches:
         assert "Token limit exceeded for 1 day(s)" in reason
 
     @pytest.mark.asyncio
-    async def test_exact_limit_boundary(self, db: Session, test_user: User):
+    async def test_exact_limit_boundary(self, db: Session, test_user: User) -> None:
         """Test behavior at exact limit boundary."""
         now = datetime.now(timezone.utc)
         
@@ -242,7 +243,7 @@ class TestTokenLimitBreaches:
         assert "Token limit exceeded" in reason
 
     @pytest.mark.asyncio
-    async def test_multiple_period_limits(self, db: Session, test_user: User):
+    async def test_multiple_period_limits(self, db: Session, test_user: User) -> None:
         """Test user with multiple period limits for same model."""
         now = datetime.now(timezone.utc)
         
@@ -262,7 +263,7 @@ class TestTokenLimitBreaches:
         assert "hour(s)" in reason
 
     @pytest.mark.asyncio
-    async def test_cumulative_usage_exceeds_limit(self, db: Session, test_user: User):
+    async def test_cumulative_usage_exceeds_limit(self, db: Session, test_user: User) -> None:
         """Test that cumulative usage across multiple records exceeds limit."""
         now = datetime.now(timezone.utc)
         
@@ -288,7 +289,7 @@ class TestUserModelSeparation:
     """Test that limits are properly separated per user and per model."""
 
     @pytest.mark.asyncio
-    async def test_per_user_limit_isolation(self, db: Session):
+    async def test_per_user_limit_isolation(self, db: Session) -> None:
         """Test that users have separate token limits."""
         user1 = User(email="user1@test.com", hashed_password="hash", is_active=True)
         user2 = User(email="user2@test.com", hashed_password="hash", is_active=True)
@@ -318,7 +319,7 @@ class TestUserModelSeparation:
         assert is_allowed is True
 
     @pytest.mark.asyncio
-    async def test_per_model_limit_isolation(self, db: Session, test_user: User):
+    async def test_per_model_limit_isolation(self, db: Session, test_user: User) -> None:
         """Test that models have separate token limits."""
         now = datetime.now(timezone.utc)
         
@@ -342,7 +343,7 @@ class TestUserModelSeparation:
         assert is_allowed is True
 
     @pytest.mark.asyncio
-    async def test_cross_user_usage_isolation(self, db: Session):
+    async def test_cross_user_usage_isolation(self, db: Session) -> None:
         """Test that one user's usage doesn't affect another user's limits."""
         user1 = User(email="user1@test.com", hashed_password="hash", is_active=True)
         user2 = User(email="user2@test.com", hashed_password="hash", is_active=True)
@@ -370,7 +371,7 @@ class TestDefaultLimitsAndEdgeCases:
 
     @pytest.mark.asyncio
     @patch('app.services.token_usage.AVAILABLE_MODELS')
-    async def test_default_model_limits(self, mock_models, db: Session, test_user: User, test_model_config):
+    async def test_default_model_limits(self, mock_models: Any, db: Session, test_user: User, test_model_config: AIModel) -> None:
         """Test fallback to default model limits when no user limits exist."""
         mock_models.__iter__.return_value = [test_model_config]
         
@@ -388,7 +389,7 @@ class TestDefaultLimitsAndEdgeCases:
 
     @pytest.mark.asyncio
     @patch('app.services.token_usage.AVAILABLE_MODELS')
-    async def test_default_limit_exceeded(self, mock_models, db: Session, test_user: User, test_model_config):
+    async def test_default_limit_exceeded(self, mock_models: Any, db: Session, test_user: User, test_model_config: AIModel) -> None:
         """Test default limit breach."""
         mock_models.__iter__.return_value = [test_model_config]
         
@@ -405,7 +406,7 @@ class TestDefaultLimitsAndEdgeCases:
         assert "Default token limit exceeded" in reason
 
     @pytest.mark.asyncio
-    async def test_no_limits_found(self, db: Session, test_user: User):
+    async def test_no_limits_found(self, db: Session, test_user: User) -> None:
         """Test behavior when no limits are found."""
         with patch('app.services.token_usage.AVAILABLE_MODELS', []):
             is_allowed, reason = await TokenUsageService.check_token_limit(
@@ -416,7 +417,7 @@ class TestDefaultLimitsAndEdgeCases:
             assert reason == "No limit found"
 
     @pytest.mark.asyncio
-    async def test_zero_usage_within_limits(self, db: Session, test_user: User):
+    async def test_zero_usage_within_limits(self, db: Session, test_user: User) -> None:
         """Test that zero usage is always within limits."""
         create_token_limit(db, test_user.id, limit_value=1000)
         
@@ -428,7 +429,7 @@ class TestDefaultLimitsAndEdgeCases:
         assert reason == "OK"
 
     @pytest.mark.asyncio
-    async def test_usage_outside_time_window_ignored(self, db: Session, test_user: User):
+    async def test_usage_outside_time_window_ignored(self, db: Session, test_user: User) -> None:
         """Test that usage outside the time window is ignored."""
         now = datetime.now(timezone.utc)
         
@@ -450,7 +451,7 @@ class TestEffectiveTokenCalculation:
     """Test effective token calculation logic."""
 
     @patch('app.services.token_usage.AVAILABLE_MODELS')
-    def test_get_model_token_ratio(self, mock_models, test_model_config):
+    def test_get_model_token_ratio(self, mock_models: Any, test_model_config: AIModel) -> None:
         """Test model token ratio retrieval."""
         mock_models.__iter__.return_value = [test_model_config]
         
@@ -458,14 +459,14 @@ class TestEffectiveTokenCalculation:
         assert ratio == 2.0
 
     @patch('app.services.token_usage.AVAILABLE_MODELS')
-    def test_get_model_token_ratio_not_found(self, mock_models):
+    def test_get_model_token_ratio_not_found(self, mock_models: Any) -> None:
         """Test default ratio when model not found."""
         mock_models.__iter__.return_value = []
         
         ratio = TokenUsageService.get_model_token_ratio(AIModelId.QWEN3_8B)
         assert ratio == 1.0
 
-    def test_calculate_effective_tokens(self):
+    def test_calculate_effective_tokens(self) -> None:
         """Test effective token calculation."""
         with patch.object(TokenUsageService, 'get_model_token_ratio', return_value=4.0):
             effective = TokenUsageService.calculate_effective_tokens(
@@ -474,7 +475,7 @@ class TestEffectiveTokenCalculation:
             assert effective == 300
 
     @pytest.mark.asyncio
-    async def test_record_token_usage(self, db: Session, test_user: User):
+    async def test_record_token_usage(self, db: Session, test_user: User) -> None:
         """Test token usage recording with effective tokens."""
         with patch.object(TokenUsageService, 'get_model_token_ratio', return_value=3.0):
             usage = await TokenUsageService.record_token_usage(
@@ -490,7 +491,7 @@ class TestEffectiveTokenCalculation:
             assert usage.model_id == "qwen3:8b"
 
     @pytest.mark.asyncio
-    async def test_get_model_default_limit(self, test_model_config):
+    async def test_get_model_default_limit(self, test_model_config: AIModel) -> None:
         """Test retrieval of model default limits."""
         with patch('app.services.token_usage.AVAILABLE_MODELS', [test_model_config]):
             result = TokenUsageService.get_model_default_limit(AIModelId.QWEN3_8B)
@@ -501,7 +502,7 @@ class TestEffectiveTokenCalculation:
             assert period_unit == PeriodUnit.DAY
             assert period_value == 1
 
-    def test_get_model_default_limit_not_found(self):
+    def test_get_model_default_limit_not_found(self) -> None:
         """Test default limit retrieval when model not found."""
         with patch('app.services.token_usage.AVAILABLE_MODELS', []):
             result = TokenUsageService.get_model_default_limit(AIModelId.QWEN3_8B)
@@ -512,7 +513,7 @@ class TestUsageStatsAggregation:
     """Test token usage statistics aggregation."""
 
     @pytest.mark.asyncio
-    async def test_get_usage_stats_by_model(self, db: Session, test_user: User):
+    async def test_get_usage_stats_by_model(self, db: Session, test_user: User) -> None:
         """Test usage statistics aggregation by model."""
         now = datetime.now(timezone.utc)
         
@@ -548,13 +549,13 @@ class TestUsageStatsAggregation:
         assert gpt_stats.effective_tokens == 600
 
     @pytest.mark.asyncio
-    async def test_get_usage_stats_empty_result(self, db: Session, test_user: User):
+    async def test_get_usage_stats_empty_result(self, db: Session, test_user: User) -> None:
         """Test usage statistics when no usage exists."""
         stats = await TokenUsageService.get_usage_stats_by_model(db, test_user.id, days=30)
         assert stats == []
 
     @pytest.mark.asyncio
-    async def test_get_usage_stats_different_time_periods(self, db: Session, test_user: User):
+    async def test_get_usage_stats_different_time_periods(self, db: Session, test_user: User) -> None:
         """Test usage statistics with different time periods."""
         now = datetime.now(timezone.utc)
         
