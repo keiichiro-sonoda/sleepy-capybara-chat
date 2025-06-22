@@ -108,6 +108,23 @@
    alembic stamp head  # 現在のスキーマを最新として登録
    ```
 
+   **重要**: この対応だけでは不十分な場合があります。`alembic stamp`はマイグレーション履歴のみを更新し、実際のマイグレーション処理（CASCADE制約の追加など）は実行されません。
+
+   **完全な対応手順**:
+
+   ```bash
+   # 1. 現在のスキーマを最新として登録
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic stamp head
+   
+   # 2. 重要なマイグレーションの処理が実行されていない場合、段階的に実行
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic stamp 43b943c73c86
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade ddb6fc93d72b
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade cc12785e15bb
+   
+   # 3. CASCADE制約が正しく適用されたか確認
+   # （上記の制約確認SQLを実行）
+   ```
+
 2. **「リビジョンが見つからない」エラー**:
 
    ```bash
@@ -307,6 +324,80 @@ docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrad
 docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade cc12785e15bb
 ```
 
+#### 3-1. 既存テーブルとマイグレーション履歴の不整合が発生した場合
+
+**問題**: 本番環境で既にテーブルが存在するため、初期マイグレーション実行時に以下のエラーが発生：
+
+```text
+sqlalchemy.exc.ProgrammingError: (psycongregate2.errors.DuplicateTable) relation "users" already exists
+```
+
+**原因**: SQLAlchemyによる自動テーブル作成と、Alembicのマイグレーションが競合している
+
+**対処法**:
+
+1. **現在のスキーマを最新として登録**:
+
+   ```bash
+   # 既存のテーブル構造を最新のマイグレーション状態として認識させる
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic stamp head
+   ```
+
+2. **マイグレーション状態を確認**:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic current
+   ```
+
+3. **重要**: `alembic stamp head`は**マイグレーション履歴のみを更新**し、実際のマイグレーション処理は実行しない
+
+   これは重要な問題で、マイグレーション履歴は最新になるが、実際のデータベース制約の変更（CASCADE制約の追加など）は実行されない。
+
+4. **実際のマイグレーション処理を段階的に実行**:
+
+   `alembic stamp head`後、以下の手順で実際のマイグレーション処理を実行する：
+
+   ```bash
+   # まず一つ前のマイグレーションに戻る（履歴上のみ）
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic stamp 43b943c73c86
+   
+   # 段階的にマイグレーションを実行（実際の処理を実行）
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade ddb6fc93d72b
+   docker compose -f docker-compose.prod.yml exec backend poetry run alembic upgrade cc12785e15bb
+   ```
+
+   **注意**: `downgrade`コマンドではなく、`stamp`コマンドで履歴を調整してから`upgrade`で実際の処理を実行する
+
+5. **制約の適用確認**:
+
+   ```bash
+   # CASCADE制約が正しく設定されているか確認
+   docker compose -f docker-compose.prod.yml exec db psql -U sleepy_user -d sleepy_capybara_chat -c "
+   SELECT 
+       tc.constraint_name, 
+       tc.table_name, 
+       kcu.column_name, 
+       ccu.table_name AS foreign_table_name,
+       rc.delete_rule
+   FROM 
+       information_schema.table_constraints AS tc 
+       JOIN information_schema.key_column_usage AS kcu
+         ON tc.constraint_name = kcu.constraint_name
+       JOIN information_schema.constraint_column_usage AS ccu
+         ON ccu.constraint_name = tc.constraint_name
+       JOIN information_schema.referential_constraints AS rc
+         ON tc.constraint_name = rc.constraint_name
+   WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name IN ('chat_sessions', 'messages', 'token_limits', 'token_usage');
+   "
+   ```
+
+   期待される結果: `delete_rule`列に`CASCADE`が表示されること
+
+**教訓**:
+
+- `alembic stamp`はマイグレーション履歴の管理のみを行い、実際のデータベース変更は実行しない
+- 本番環境では必ず実際のマイグレーション処理も段階的に実行し、制約の適用を確認すること
+
 #### 4. 動作確認
 
 ```bash
@@ -392,6 +483,15 @@ make prod-restart-backend
 3. **段階的な問題解決**:
    - 一つのエラーを修正すると、次のエラーが見えてくることがある
    - 全体的な関連性を理解して包括的に修正することが重要
+
+4. **`alembic stamp`の重要な落とし穴**:
+   - `alembic stamp head`はマイグレーション履歴の更新のみを行い、実際のマイグレーション処理は実行しない
+   - 既存テーブルとマイグレーション履歴を同期させた後、重要なマイグレーション（CASCADE制約追加など）は個別に実行が必要
+   - 本番環境では特に、マイグレーション履歴の同期と実際の処理実行を明確に分けて考える必要がある
+
+5. **本番環境でのマイグレーション検証の重要性**:
+   - マイグレーション適用後は必ず制約やデータベース構造の確認を実施する
+   - アプリケーションレベルでの機能テスト（ユーザー削除など）も必須
 
 ## 参考リソース
 

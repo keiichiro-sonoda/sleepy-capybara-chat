@@ -296,17 +296,17 @@ prod-migrate:
 prod-db-constraints:
 	@echo "🔍 本番環境のデータベース制約を確認しています..."
 	@echo "=== chat_sessions テーブル ==="
-	docker compose -f docker-compose.prod.yml exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ chat_sessions"
+	docker compose -f docker-compose.prod.yml exec db sh -c 'psql -U $$POSTGRES_USER $$POSTGRES_DB -c "\d+ chat_sessions"'
 	@echo ""
 	@echo "=== token_usage テーブル ==="
-	docker compose -f docker-compose.prod.yml exec db psql -U $${POSTGRES_USER} $${POSTGRES_DB} -c "\d+ token_usage"
+	docker compose -f docker-compose.prod.yml exec db sh -c 'psql -U $$POSTGRES_USER $$POSTGRES_DB -c "\d+ token_usage"'
 
 # 本番環境 - バックアップ・復元
 prod-backup-db:
 	@echo "💾 本番データベースをバックアップしています..."
 	@mkdir -p backups
 	@DATE=$$(date +%Y%m%d_%H%M%S); \
-	docker compose -f docker-compose.prod.yml exec -T db pg_dump -U $${POSTGRES_USER} $${POSTGRES_DB} > backups/prod_backup_$${DATE}.sql && \
+	docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U $$POSTGRES_USER $$POSTGRES_DB' > backups/prod_backup_$${DATE}.sql && \
 	echo "✅ 本番バックアップ完了: backups/prod_backup_$${DATE}.sql"
 
 prod-restore-db:
@@ -318,7 +318,7 @@ prod-restore-db:
 	fi
 	@echo "⚠️  データベースを $(BACKUP_FILE) から復元します"
 	@read -p "続行しますか？ (y/N): " confirm && [ "$$confirm" = "y" ]
-	docker compose -f docker-compose.prod.yml exec -T db psql -U $${POSTGRES_USER} $${POSTGRES_DB} < $(BACKUP_FILE)
+	cat $(BACKUP_FILE) | docker compose -f docker-compose.prod.yml exec -T db sh -c 'psql -U $$POSTGRES_USER $$POSTGRES_DB'
 	@echo "✅ データベース復元完了"
 
 # 本番環境 - メンテナンスモード
