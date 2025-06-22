@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.schemas.chat import AVAILABLE_MODELS, AIModel, DEFAULT_MODEL
+from app.schemas.chat import AVAILABLE_MODELS, DEFAULT_MODEL, AIModel
 
 router = APIRouter()
 

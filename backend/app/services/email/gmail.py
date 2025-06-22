@@ -1,12 +1,14 @@
+import logging
 import smtplib
 import ssl
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
+
 from jinja2 import Template
-import logging
 
 from app.core.config import get_settings
+
 from .base import EmailService
 
 logger = logging.getLogger(__name__)

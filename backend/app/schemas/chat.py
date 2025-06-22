@@ -1,6 +1,8 @@
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
-from app.schemas.enums import PeriodUnit, AIModelId
+
+from app.schemas.enums import AIModelId, PeriodUnit
 
 
 # AIモデルの定義用クラス

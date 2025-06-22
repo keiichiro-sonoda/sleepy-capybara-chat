@@ -184,7 +184,8 @@ class OpenAIProvider(ModelProvider):
                     elif event_type == "ResponseCreatedEvent" and hasattr(chunk, "id"):
                         response_id = chunk.id
                         logger.debug(
-                            f"Captured response_id from ResponseCreatedEvent: {response_id}"
+                            "Captured response_id from ResponseCreatedEvent: "
+                            f"{response_id}"
                         )
                     # ResponseInProgressEventからID取得
                     elif event_type == "ResponseInProgressEvent" and hasattr(
@@ -192,7 +193,8 @@ class OpenAIProvider(ModelProvider):
                     ):
                         response_id = chunk.id
                         logger.debug(
-                            f"Captured response_id from ResponseInProgressEvent: {response_id}"
+                            "Captured response_id from ResponseInProgressEvent: "
+                            f"{response_id}"
                         )
                     # その他の属性からID取得
                     elif hasattr(chunk, "response_id"):
@@ -221,7 +223,11 @@ class OpenAIProvider(ModelProvider):
             }
 
             # 1. 直接的な方法：イベントから直接usage情報を取得
-            if last_chunk is not None and hasattr(last_chunk, "usage") and last_chunk.usage:
+            if (
+                last_chunk is not None
+                and hasattr(last_chunk, "usage")
+                and last_chunk.usage
+            ):
                 usage_data = self._extract_token_usage(last_chunk.usage)
                 self._log_token_usage(usage_data, model_name, "event")
 
@@ -238,7 +244,8 @@ class OpenAIProvider(ModelProvider):
                     logger.error(f"Error retrieving response details: {str(e)}")
             else:
                 logger.warning(
-                    f"No usage information available for streaming response. Response ID: {response_id}"
+                    "No usage information available for streaming response. "
+                    f"Response ID: {response_id}"
                 )
 
             # ストリーム終了時にトークン使用量情報と共に完了を通知

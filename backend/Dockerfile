@@ -12,6 +12,10 @@ RUN pip install poetry
 # poetryの定義ファイルをコピー (存在する場合)
 COPY pyproject.toml* poetry.lock* ./
 
+# 設定ファイルをコピー
+COPY .flake8 ./
+COPY mypy.ini ./
+
 # poetryでライブラリをインストール (pyproject.tomlが既にある場合)
 RUN poetry config virtualenvs.in-project true
 RUN if [ -f pyproject.toml ]; then poetry install --no-root; fi
@@ -23,8 +27,11 @@ COPY app app/
 COPY migrations migrations/
 COPY alembic.ini .
 
-# mypyで型チェックを実行
-# RUN poetry run mypy app/
+# コードフォーマットとリンティングのチェック
+RUN poetry run black --check --diff app/
+RUN poetry run isort --check-only --diff app/
+RUN poetry run flake8 app/
+RUN poetry run mypy app/
 
 # 権限の設定
 RUN chown -R appuser:appuser /src

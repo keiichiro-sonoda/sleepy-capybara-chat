@@ -1,14 +1,16 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from app.core.config import get_settings
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api import api_router
-from app.db.session import Base, engine, SessionLocal
+from app.core.config import get_settings
 from app.db.seed import seed_admin_user
+from app.db.session import SessionLocal, engine
+from app.models.base import Base
 
 settings = get_settings()
 

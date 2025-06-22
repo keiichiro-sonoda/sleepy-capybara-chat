@@ -1,38 +1,34 @@
-from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import logging
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-import logging
-from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
+from app.core.deps import get_current_active_admin
 from app.core.security import (
-    verify_password,
-    get_password_hash,
     create_access_token,
     get_current_user,
+    get_password_hash,
+    verify_password,
 )
-from app.core.deps import get_current_active_admin
 from app.core.token import (
-    set_verification_token,
-    verify_token,
     set_reset_token,
+    set_verification_token,
     verify_reset_token,
+    verify_token,
 )
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import (
-    Token,
-    UserCreate,
-    User as UserSchema,
-    PasswordResetRequest,
-    PasswordResetConfirm,
-)
-from app.schemas.user import UserList
+from app.schemas.auth import PasswordResetConfirm, PasswordResetRequest, Token
+from app.schemas.auth import User as UserSchema
+from app.schemas.auth import UserCreate
 from app.schemas.email import ResendConfirmationRequest
-from app.services.email import send_verification_email, send_password_reset_email
+from app.schemas.user import UserList
+from app.services.email import send_password_reset_email, send_verification_email
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 settings = get_settings()
@@ -169,7 +165,10 @@ async def resend_confirmation(
             if time_since_last_token < timedelta(minutes=1):
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Please wait at least 1 minute before requesting another confirmation email.",
+                    detail=(
+                        "Please wait at least 1 minute before requesting "
+                        "another confirmation email."
+                    ),
                 )
 
         try:
@@ -186,7 +185,10 @@ async def resend_confirmation(
             )
 
     return {
-        "message": "If your email is registered and not verified, a new confirmation email has been sent."
+        "message": (
+            "If your email is registered and not verified, "
+            "a new confirmation email has been sent."
+        )
     }
 
 
@@ -284,7 +286,8 @@ async def set_user_active(
     db.commit()
 
     logger.info(
-        f"User {user_id} active status updated to {is_active} by admin {current_user.id}"
+        f"User {user_id} active status updated to {is_active} "
+        f"by admin {current_user.id}"
     )
     return {"message": f"User active status updated to {is_active} for user {user_id}"}
 
@@ -330,20 +333,19 @@ async def password_reset_request(
     if user:
         # レート制限チェック：最後のトークン生成から60秒以内は再送信を拒否
         if user.reset_token_expires_at:
-            try:
-                # reset_token_expires_atは1時間後なので、59分前をチェック
-                expires_at = datetime.fromisoformat(user.reset_token_expires_at)
-                token_generated_at = expires_at - timedelta(hours=1)
-                time_since_last_token = datetime.now(timezone.utc) - token_generated_at
+            # reset_token_expires_atは1時間後なので、59分前をチェック
+            expires_at = user.reset_token_expires_at
+            token_generated_at = expires_at - timedelta(hours=1)
+            time_since_last_token = datetime.now(timezone.utc) - token_generated_at
 
-                if time_since_last_token < timedelta(minutes=1):
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail="Please wait at least 1 minute before requesting another password reset email.",
-                    )
-            except ValueError:
-                # 無効な日付形式の場合は続行
-                pass
+            if time_since_last_token < timedelta(minutes=1):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "Please wait at least 1 minute before requesting "
+                        "another password reset email."
+                    ),
+                )
 
         # トークンを生成してメール送信
         # 新しいトークンを生成すると古いトークンは自動的に無効化される

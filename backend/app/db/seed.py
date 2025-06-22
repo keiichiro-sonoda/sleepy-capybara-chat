@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.core.config import get_settings
 
 
 def seed_admin_user(db: Session) -> None:

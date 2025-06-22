@@ -1,4 +1,5 @@
 """
 Schemas module
 """
-from .email import ResendConfirmationRequest 
+
+from .email import ResendConfirmationRequest
