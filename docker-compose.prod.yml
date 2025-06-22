@@ -3,9 +3,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-      args:
-        - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
-        - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
+    env_file:
+      - .env.prod
+    environment:
+      - NODE_ENV=production
     restart: unless-stopped
     # 本番では開発用ボリュームマウントを削除
     # volumes:
@@ -15,18 +16,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL}
     env_file:
-      - ./backend/.env
+      # 本番環境の環境変数ファイル読み込み順序
+      - .env.prod              # 本番環境共通設定
+      - ./backend/.env.prod    # バックエンド本番環境設定
+    environment:
+      - ENVIRONMENT=production
     restart: unless-stopped
     # 本番では開発用ボリュームマウントを削除
     # volumes:
@@ -39,6 +34,8 @@ services:
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama
+    env_file:
+      - .env.prod
     deploy:
       resources:
         reservations:
@@ -49,12 +46,8 @@ services:
 
   db:
     image: postgres:15
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
+    env_file:
+      - .env.prod
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -73,8 +66,11 @@ services:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
+    env_file:
+      - .env.prod
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      # TUNNEL_TOKENが設定されていない場合はエラーメッセージを表示
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN environment variable is required}
     volumes:
       - cloudflared_data:/home/nonroot/.cloudflared
 

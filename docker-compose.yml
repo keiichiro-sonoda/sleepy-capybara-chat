@@ -14,11 +14,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    env_file:
+      - .env
+      - ./frontend/.env.local
+    environment:
+      # 開発環境固有の設定のみ
+      - NODE_ENV=development
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-      - ./frontend/.env.local:/app/.env.local
     ports:
       - "3000:3000"
 
@@ -32,22 +37,14 @@ services:
       - ./backend/app:/src/app
       - ./backend/tests:/src/tests
       - ./backend/migrations:/src/migrations
-      - ./.env:/src/.env
     user: "1000:1000"  # appuserのUID:GIDを指定
-    environment:
-      # ルートの.envから統一された環境変数を注入
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL}
     env_file:
-      # バックエンド固有の設定は引き続きenv_fileで読み込み
-      - ./backend/.env
+      # 環境変数ファイルの読み込み順序（後に読み込まれたファイルが優先）
+      - .env                    # 共通設定
+      - ./backend/.env         # バックエンド固有設定
+    environment:
+      # 開発環境固有の設定のみ
+      - ENVIRONMENT=development
     depends_on:
       - db
       - ollama
@@ -57,6 +54,8 @@ services:
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama
+    env_file:
+      - .env
     deploy:
       resources:
         reservations:
@@ -69,13 +68,8 @@ services:
     image: postgres:15
     ports:
       - "5432:5432"
-    environment:
-      # ルートの.envから統一
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
@@ -91,8 +85,11 @@ services:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
+    env_file:
+      - .env
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      # TUNNEL_TOKENが設定されていない場合はエラーメッセージを表示
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN environment variable is required}
     volumes:
       - cloudflared_data:/home/nonroot/.cloudflared
 
