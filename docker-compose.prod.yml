@@ -3,9 +3,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-      args:
-        - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
-        - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
+    environment:
+      - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
+      - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
     restart: unless-stopped
     # 本番では開発用ボリュームマウントを削除
     # volumes:

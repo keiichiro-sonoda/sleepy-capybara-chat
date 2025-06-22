@@ -98,6 +98,24 @@ sleepy-capybara-chat/
          - ./frontend/.env.local:/app/.env.local
    ```
 
+4. **Next.js特有の注意点**：
+
+   ```yaml
+   services:
+     frontend:
+       # ❌ build argsは認識されない場合がある
+       build:
+         args:
+           - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
+       
+       # ✅ environmentで設定する
+       environment:
+         - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api
+         - NEXT_PUBLIC_APP_NAME=${PROJECT_NAME:-Sleepy Capybara Chat}
+   ```
+
+   **重要**: Next.jsの`NEXT_PUBLIC_*`環境変数は、Docker Composeでは`environment`セクションで設定する必要があります。`build args`では正しく認識されない場合があります。
+
 ## セキュリティ上の注意点
 
 1. `.gitignore`に全ての実際の環境変数ファイルを含める
@@ -151,7 +169,32 @@ sleepy-capybara-chat/
 
 ## よくある詰まりポイント
 
-### 1. メールリンクのドメインが間違っている
+### 1. Next.js環境変数がbuild argsで設定できない
+
+**症状**: Docker Composeでbuild argsに`NEXT_PUBLIC_*`環境変数を設定してもフロントエンドで認識されない
+
+**原因**: Next.jsのビルドプロセスでは、build argsよりもruntime環境変数（environment）が優先される
+
+**解決方法**:
+
+```yaml
+# ❌ 動作しないパターン
+services:
+  frontend:
+    build:
+      args:
+        - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api  # 認識されない
+
+# ✅ 正しいパターン  
+services:
+  frontend:
+    environment:
+      - NEXT_PUBLIC_API_URL=${BACKEND_URL}/api   # 正常に認識される
+```
+
+**教訓**: Next.jsコンテナでは`build args`ではなく`environment`で`NEXT_PUBLIC_*`変数を設定する
+
+### 2. メールリンクのドメインが間違っている
 
 **症状**: パスワードリセットメールのリンクが `localhost:3000` になってしまう
 
