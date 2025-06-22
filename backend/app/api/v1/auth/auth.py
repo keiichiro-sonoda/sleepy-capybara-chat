@@ -352,6 +352,10 @@ async def password_reset_request(
             await send_password_reset_email(user.email, token)
         except Exception as e:
             logger.error(f"Failed to send password reset email: {str(e)}")
+            # Remove the token if sending fails so it cannot be reused
+            user.reset_token = None
+            user.reset_token_expires_at = None
+            db.commit()
             # メール送信エラー時も同一の成功メッセージを返す（セキュリティ対策）
             pass
 
