@@ -2,11 +2,11 @@ import logging
 from pathlib import Path
 
 from jinja2 import Template
-from sendgrid import SendGridAPIClient  # type: ignore
-from sendgrid.helpers.mail import Mail  # type: ignore
+from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     ClickTracking,
     Email,
+    Mail,
     OpenTracking,
     SubscriptionTracking,
     To,

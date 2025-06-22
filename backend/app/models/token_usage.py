@@ -14,24 +14,26 @@ if TYPE_CHECKING:
 class TokenUsage(Base):
     __tablename__ = "token_usage"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, init=False)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, index=True
-    )
-    session_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("chat_sessions.id"), nullable=True, index=True
     )
     model_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     effective_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    session_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("chat_sessions.id"), nullable=True, index=True, default=None
+    )
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), server_default=func.now(), index=True, init=False
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="token_usage")
-    chat_session: Mapped["ChatSession"] = relationship("ChatSession")
+    user: Mapped["User"] = relationship(
+        "User", back_populates="token_usage", init=False
+    )
+    chat_session: Mapped["ChatSession"] = relationship("ChatSession", init=False)
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

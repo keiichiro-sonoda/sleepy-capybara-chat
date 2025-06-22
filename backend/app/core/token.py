@@ -47,14 +47,12 @@ def set_reset_token(db: Session, user: User, hours: int = 1) -> str:
 
     The token is valid for the specified number of `hours` (default: 1 hour).
     """
-    from datetime import timezone  # 遅延インポートで循環参照を防止
-
     token = generate_reset_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
 
-    # `reset_token_expires_at` は文字列カラムとして定義されているため ISO 形式で保存する
+    # reset_token_expires_atは現在datetimeフィールドなので直接保存
     user.reset_token = token
-    user.reset_token_expires_at = expires_at.isoformat()
+    user.reset_token_expires_at = expires_at
     db.commit()
 
     return token
@@ -69,13 +67,8 @@ def verify_reset_token(db: Session, token: str) -> User | None:
     if not user or not user.reset_token_expires_at:
         return None
 
-    try:
-        expires_at = datetime.fromisoformat(user.reset_token_expires_at)
-    except ValueError:
-        # 無効な日付形式
-        return None
-
-    if expires_at <= datetime.now(timezone.utc):
+    # reset_token_expires_atは現在datetimeフィールドなので直接比較
+    if user.reset_token_expires_at <= datetime.now(timezone.utc):
         # トークンが期限切れ
         return None
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -43,7 +44,7 @@ async def get_my_token_usage_by_model(
 async def get_my_token_limits_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> dict[str, Any]:
     """
     自分自身のトークン制限と使用量の詳細を取得する
     """

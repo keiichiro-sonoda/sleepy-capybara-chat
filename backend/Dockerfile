@@ -14,6 +14,7 @@ COPY pyproject.toml* poetry.lock* ./
 
 # 設定ファイルをコピー
 COPY .flake8 ./
+COPY mypy.ini ./
 
 # poetryでライブラリをインストール (pyproject.tomlが既にある場合)
 RUN poetry config virtualenvs.in-project true
@@ -30,7 +31,7 @@ COPY alembic.ini .
 RUN poetry run black --check --diff app/
 RUN poetry run isort --check-only --diff app/
 RUN poetry run flake8 app/
-# RUN poetry run mypy app/
+RUN poetry run mypy app/
 
 # 権限の設定
 RUN chown -R appuser:appuser /src

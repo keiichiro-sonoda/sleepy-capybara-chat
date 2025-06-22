@@ -1,3 +1,10 @@
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 
-Base = declarative_base()
+
+class Base(MappedAsDataclass, DeclarativeBase):
+    """SQLAlchemy 2.0スタイルのベースクラス
+
+    MappedAsDataclassにより、型付きの__init__が自動生成される
+    """
+
+    pass

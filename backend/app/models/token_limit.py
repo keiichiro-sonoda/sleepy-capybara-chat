@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy import ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -5,11 +7,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 from app.schemas.enums import AIModelId, MetricType, PeriodUnit
 
+if TYPE_CHECKING:
+    from app.models.user import User
+
 
 class TokenLimit(Base):
     __tablename__ = "token_limits"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, init=False)
     model_id: Mapped[AIModelId] = mapped_column(
         SQLAlchemyEnum(AIModelId, name="aimodelid_enum", create_type=True),
         index=True,
@@ -36,7 +41,9 @@ class TokenLimit(Base):
     )  # 例: 1 (period_unitと合わせて「1時間」)
 
     # リレーションシップ (必要に応じて)
-    user = relationship("User", back_populates="token_limits")
+    user: Mapped["User"] = relationship(
+        "User", back_populates="token_limits", init=False
+    )
 
     # 複合ユニーク制約（例：同じユーザー/モデルに対して同じ種類の制限は一つだけ）
     __table_args__ = (

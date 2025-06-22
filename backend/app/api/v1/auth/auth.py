@@ -333,23 +333,19 @@ async def password_reset_request(
     if user:
         # レート制限チェック：最後のトークン生成から60秒以内は再送信を拒否
         if user.reset_token_expires_at:
-            try:
-                # reset_token_expires_atは1時間後なので、59分前をチェック
-                expires_at = datetime.fromisoformat(user.reset_token_expires_at)
-                token_generated_at = expires_at - timedelta(hours=1)
-                time_since_last_token = datetime.now(timezone.utc) - token_generated_at
+            # reset_token_expires_atは1時間後なので、59分前をチェック
+            expires_at = user.reset_token_expires_at
+            token_generated_at = expires_at - timedelta(hours=1)
+            time_since_last_token = datetime.now(timezone.utc) - token_generated_at
 
-                if time_since_last_token < timedelta(minutes=1):
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=(
-                            "Please wait at least 1 minute before requesting "
-                            "another password reset email."
-                        ),
-                    )
-            except ValueError:
-                # 無効な日付形式の場合は続行
-                pass
+            if time_since_last_token < timedelta(minutes=1):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "Please wait at least 1 minute before requesting "
+                        "another password reset email."
+                    ),
+                )
 
         # トークンを生成してメール送信
         # 新しいトークンを生成すると古いトークンは自動的に無効化される

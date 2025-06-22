@@ -1,11 +1,13 @@
 import json
 import logging
 import typing
+from datetime import datetime
 from typing import Any, AsyncGenerator, cast
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -166,7 +168,7 @@ async def create_message(
     db.add(user_message)
 
     # セッションのupdated_atを更新
-    chat_session.updated_at = func.now()
+    chat_session.updated_at = datetime.now(ZoneInfo("UTC"))
     db.add(chat_session)
 
     db.commit()
@@ -192,8 +194,7 @@ async def create_message(
 
     # Cast the values within the list comprehension to str
     formatted_messages: list[dict[str, str]] = [
-        {"role": cast(str, msg.role), "content": cast(str, msg.content)}
-        for msg in chat_history
+        {"role": msg.role, "content": msg.content} for msg in chat_history
     ]
 
     # ストリーミングモードの場合
@@ -276,7 +277,7 @@ async def create_message(
         db.add(ai_message)
 
         # セッションのupdated_atを更新
-        chat_session.updated_at = func.now()
+        chat_session.updated_at = datetime.now(ZoneInfo("UTC"))
         db.add(chat_session)
 
         db.commit()
@@ -455,7 +456,7 @@ async def _stream_chat_response(
                     db.query(ChatSession).filter(ChatSession.id == session_id).first()
                 )
                 if chat_session_for_update:
-                    chat_session_for_update.updated_at = func.now()
+                    chat_session_for_update.updated_at = datetime.now(ZoneInfo("UTC"))
                     db.add(chat_session_for_update)
 
                 db.commit()
@@ -538,7 +539,7 @@ async def update_chat_session(
 
     # セッション名を更新
     chat_session.name = session_update.name
-    chat_session.updated_at = func.now()
+    chat_session.updated_at = datetime.now(ZoneInfo("UTC"))
     db.add(chat_session)
     db.commit()
     db.refresh(chat_session)
