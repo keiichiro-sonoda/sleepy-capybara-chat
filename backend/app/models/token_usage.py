@@ -1,11 +1,13 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from sqlalchemy import ForeignKey, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.user import User
-from app.models.chat import ChatSession
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.chat import ChatSession
 
 
 class TokenUsage(Base):
@@ -27,8 +29,8 @@ class TokenUsage(Base):
         DateTime(timezone=True), server_default=func.now(), index=True
     )
 
-    user: Mapped[User] = relationship(User)
-    chat_session: Mapped[ChatSession] = relationship(ChatSession)
+    user: Mapped["User"] = relationship("User", back_populates="token_usage")
+    chat_session: Mapped["ChatSession"] = relationship("ChatSession")
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
