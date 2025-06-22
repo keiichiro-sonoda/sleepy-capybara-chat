@@ -32,5 +32,12 @@ class User(Base):
     )
 
     # リレーションシップ
-    chat_sessions = relationship("ChatSession", back_populates="user")
-    token_limits = relationship("TokenLimit", back_populates="user")
+    chat_sessions = relationship(
+        "ChatSession", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+    token_limits = relationship(
+        "TokenLimit", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+    token_usage = relationship(
+        "TokenUsage", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )

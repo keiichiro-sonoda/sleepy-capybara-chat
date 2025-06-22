@@ -23,7 +23,7 @@ class ChatSession(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # リレーションシップ
-    messages = relationship("Message", back_populates="chat_session")
+    messages = relationship("Message", back_populates="chat_session", cascade="all, delete-orphan", passive_deletes=True)
     user = relationship("User", back_populates="chat_sessions")
 
 

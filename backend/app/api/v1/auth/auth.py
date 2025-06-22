@@ -216,8 +216,18 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    db.delete(user)
-    db.commit()
+    try:
+        # ユーザーを削除（cascade設定により関連データも自動削除される）
+        db.delete(user)
+        db.commit()
+        logger.info(f"User {user_id} and all related data deleted successfully")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete user",
+        )
 
     return {"message": "User deleted successfully"}
 
@@ -226,8 +236,18 @@ async def delete_user(
 async def delete_me(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> dict[str, str]:
-    db.delete(current_user)
-    db.commit()
+    try:
+        # ユーザーを削除（cascade設定により関連データも自動削除される）
+        db.delete(current_user)
+        db.commit()
+        logger.info(f"User {current_user.id} and all related data deleted successfully")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete your account",
+        )
 
     return {"message": "Your account has been deleted successfully"}
 
