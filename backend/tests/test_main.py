@@ -2,6 +2,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy_utils import create_database, drop_database
+import os
+import pytest
+
+if not os.getenv("RUN_DB_TESTS"):
+    pytest.skip("Database tests skipped", allow_module_level=True)
 
 from app.main import app
 from app.core.config import get_settings

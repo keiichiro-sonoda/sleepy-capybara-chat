@@ -11,8 +11,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.models.base import Base
 from app.models.user import User
-from app.main import app
+from fastapi import FastAPI
+from app.api.v1.api import api_router
+from app.core.config import get_settings
 from app.db.session import get_db
+
+settings = get_settings()
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+)
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
