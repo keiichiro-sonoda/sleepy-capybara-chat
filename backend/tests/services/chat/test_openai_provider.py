@@ -3,6 +3,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.chat.openai import OpenAIProvider
 
 
+class MockAsyncIterator:
+    """非同期イテレータのモック"""
+
+    def __init__(self, items):
+        self.items = iter(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.items)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
 class TestOpenAIProviderStreaming:
     """OpenAIプロバイダーのストリーミング処理のテスト"""
 
@@ -14,18 +30,13 @@ class TestOpenAIProviderStreaming:
     @pytest.mark.asyncio
     async def test_empty_stream_handling(self, provider: OpenAIProvider) -> None:
         """空のストリームでもエラーが発生しないことをテスト"""
-        async def async_iter():
-            return
-            yield  # unreachable but needed for generator
+        # 空のストリームをモック
+        mock_stream = MockAsyncIterator([])
 
-        mock_stream = MagicMock()
-        mock_stream.__aiter__ = async_iter
-
-        # モックされたclientを設定 - awaitableを返すように修正
-        async def mock_create(*args, **kwargs):
-            return mock_stream
-
-        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
+        # モックされたclient.responses.createを設定（awaitableにする）
+        mock_create = AsyncMock(return_value=mock_stream)
+        
+        with patch.object(provider.client.responses, "create", mock_create):
             # ストリーミング処理を実行
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
@@ -44,24 +55,25 @@ class TestOpenAIProviderStreaming:
     @pytest.mark.asyncio
     async def test_stream_with_usage_data(self, provider: OpenAIProvider) -> None:
         """usage情報を持つストリームの処理をテスト"""
-        # usage情報を持つチャンクをモック
-        mock_chunk = MagicMock()
-        mock_chunk.usage = MagicMock()
-        mock_chunk.usage.input_tokens = 10
-        mock_chunk.usage.output_tokens = 20
-        mock_chunk.usage.total_tokens = 30
+        # テキストチャンクをモック
+        text_chunk = MagicMock()
+        text_chunk.__class__.__name__ = "ResponseTextDeltaEvent"
+        text_chunk.delta = "Hello"
+        
+        # 完了イベントチャンクをモック（usage情報付き）
+        done_chunk = MagicMock()
+        done_chunk.__class__.__name__ = "ResponseTextDoneEvent"
+        done_chunk.usage = MagicMock()
+        done_chunk.usage.input_tokens = 10
+        done_chunk.usage.output_tokens = 20
+        done_chunk.usage.total_tokens = 30
 
-        async def async_iter():
-            yield mock_chunk
+        mock_stream = MockAsyncIterator([text_chunk, done_chunk])
 
-        mock_stream = MagicMock()
-        mock_stream.__aiter__ = async_iter
+        # モックされたclient.responses.createを設定（awaitableにする）
+        mock_create = AsyncMock(return_value=mock_stream)
 
-        # モックされたclientを設定 - awaitableを返すように修正
-        async def mock_create(*args, **kwargs):
-            return mock_stream
-
-        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
+        with patch.object(provider.client.responses, "create", mock_create):
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
 
@@ -69,9 +81,18 @@ class TestOpenAIProviderStreaming:
             async for result in result_generator:
                 results.append(result)
 
-            # usage情報が正しく抽出されることを確認
-            assert len(results) == 1
-            usage_data = results[0][3]
+            # テキストチャンクとdoneイベントが返されることを確認
+            assert len(results) == 2
+            
+            # 最初のチャンクはテキスト
+            assert results[0][0] == "Hello"
+            assert results[0][1] == "answer"
+            assert results[0][2] is False
+            
+            # 2番目のチャンクは完了通知（usage情報付き）
+            assert results[1][1] == "done"
+            assert results[1][2] is True
+            usage_data = results[1][3]
             assert usage_data["prompt_tokens"] == 10
             assert usage_data["completion_tokens"] == 20
             assert usage_data["total_tokens"] == 30
@@ -79,21 +100,17 @@ class TestOpenAIProviderStreaming:
     @pytest.mark.asyncio
     async def test_stream_without_usage_data(self, provider: OpenAIProvider) -> None:
         """usage情報がないストリームでもエラーが発生しないことをテスト"""
-        # usage情報を持たないチャンクをモック
-        mock_chunk = MagicMock()
-        mock_chunk.usage = None
+        # usage情報を持たない完了チャンクをモック
+        done_chunk = MagicMock()
+        done_chunk.__class__.__name__ = "ResponseTextDoneEvent"
+        done_chunk.usage = None
 
-        async def async_iter():
-            yield mock_chunk
+        mock_stream = MockAsyncIterator([done_chunk])
 
-        mock_stream = MagicMock()
-        mock_stream.__aiter__ = async_iter
+        # モックされたclient.responses.createを設定（awaitableにする）
+        mock_create = AsyncMock(return_value=mock_stream)
 
-        # モックされたclientを設定 - awaitableを返すように修正
-        async def mock_create(*args, **kwargs):
-            return mock_stream
-
-        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
+        with patch.object(provider.client.responses, "create", mock_create):
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
 
