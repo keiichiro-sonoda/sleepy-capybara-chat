@@ -1,18 +1,21 @@
-import pytest
+from typing import Any, Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from app.services.chat.openai import OpenAIProvider
 
 
 class MockAsyncIterator:
     """非同期イテレータのモック"""
 
-    def __init__(self, items):
-        self.items = iter(items)
+    def __init__(self, items: list[Any]) -> None:
+        self.items: Iterator[Any] = iter(items)
 
-    def __aiter__(self):
+    def __aiter__(self) -> "MockAsyncIterator":
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> Any:
         try:
             return next(self.items)
         except StopIteration:
@@ -35,7 +38,7 @@ class TestOpenAIProviderStreaming:
 
         # モックされたclient.responses.createを設定（awaitableにする）
         mock_create = AsyncMock(return_value=mock_stream)
-        
+
         with patch.object(provider.client.responses, "create", mock_create):
             # ストリーミング処理を実行
             messages = [{"role": "user", "content": "test"}]
@@ -59,7 +62,7 @@ class TestOpenAIProviderStreaming:
         text_chunk = MagicMock()
         text_chunk.__class__.__name__ = "ResponseTextDeltaEvent"
         text_chunk.delta = "Hello"
-        
+
         # 完了イベントチャンクをモック（usage情報付き）
         done_chunk = MagicMock()
         done_chunk.__class__.__name__ = "ResponseTextDoneEvent"
@@ -83,12 +86,12 @@ class TestOpenAIProviderStreaming:
 
             # テキストチャンクとdoneイベントが返されることを確認
             assert len(results) == 2
-            
+
             # 最初のチャンクはテキスト
             assert results[0][0] == "Hello"
             assert results[0][1] == "answer"
             assert results[0][2] is False
-            
+
             # 2番目のチャンクは完了通知（usage情報付き）
             assert results[1][1] == "done"
             assert results[1][2] is True

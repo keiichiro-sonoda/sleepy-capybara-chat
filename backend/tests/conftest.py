@@ -1,19 +1,15 @@
-import pytest
-import pytest_asyncio
-import sys
-import os
+from datetime import datetime, timezone
 from typing import Generator
+
+import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from fastapi.testclient import TestClient
-from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+from app.db.session import get_db
+from app.main import app
 from app.models.base import Base
 from app.models.user import User
-from app.main import app
-from app.db.session import get_db
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(

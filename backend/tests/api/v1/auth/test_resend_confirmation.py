@@ -1,14 +1,11 @@
-import pytest
-import sys
-import os
-from typing import Generator
-from unittest.mock import patch, AsyncMock
 from datetime import datetime, timezone
+from typing import Generator
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../..")))
 
 from app.models.user import User
 
@@ -55,9 +52,11 @@ async def test_resend_confirmation_to_unverified_user(
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {
-        "message": "If your email is registered and not verified, a new confirmation email has been sent."
-    }
+    expected_message = (
+        "If your email is registered and not verified, "
+        "a new confirmation email has been sent."
+    )
+    assert response.json() == {"message": expected_message}
 
     mock_service.send_verification_email.assert_called_once()
 
@@ -88,16 +87,20 @@ async def test_resend_confirmation_to_verified_user(
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {
-        "message": "If your email is registered and not verified, a new confirmation email has been sent."
-    }
+    expected_message = (
+        "If your email is registered and not verified, "
+        "a new confirmation email has been sent."
+    )
+    assert response.json() == {"message": expected_message}
 
     mock_service.send_verification_email.assert_not_called()
 
 
 @pytest.mark.asyncio
 @patch("app.services.email.get_email_service")
-async def test_resend_confirmation_to_nonexistent_user(mock_get_service: AsyncMock, client: TestClient) -> None:
+async def test_resend_confirmation_to_nonexistent_user(
+    mock_get_service: AsyncMock, client: TestClient
+) -> None:
     """Test resending confirmation to a non-existent user."""
     mock_service = AsyncMock()
     mock_get_service.return_value = mock_service
@@ -107,8 +110,10 @@ async def test_resend_confirmation_to_nonexistent_user(mock_get_service: AsyncMo
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {
-        "message": "If your email is registered and not verified, a new confirmation email has been sent."
-    }
+    expected_message = (
+        "If your email is registered and not verified, "
+        "a new confirmation email has been sent."
+    )
+    assert response.json() == {"message": expected_message}
 
     mock_service.send_verification_email.assert_not_called()
