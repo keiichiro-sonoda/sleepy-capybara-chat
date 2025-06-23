@@ -14,12 +14,18 @@ class TestOpenAIProviderStreaming:
     @pytest.mark.asyncio
     async def test_empty_stream_handling(self, provider: OpenAIProvider) -> None:
         """空のストリームでもエラーが発生しないことをテスト"""
-        # 空のストリームをモック
-        mock_stream = AsyncMock()
-        mock_stream.__aiter__ = lambda: iter([])  # 空のイテレータ
+        async def async_iter():
+            return
+            yield  # unreachable but needed for generator
 
-        # モックされたclientを設定
-        with patch.object(provider.client.responses, 'create', return_value=mock_stream):
+        mock_stream = MagicMock()
+        mock_stream.__aiter__ = async_iter
+
+        # モックされたclientを設定 - awaitableを返すように修正
+        async def mock_create(*args, **kwargs):
+            return mock_stream
+
+        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
             # ストリーミング処理を実行
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
@@ -45,10 +51,17 @@ class TestOpenAIProviderStreaming:
         mock_chunk.usage.output_tokens = 20
         mock_chunk.usage.total_tokens = 30
 
-        mock_stream = AsyncMock()
-        mock_stream.__aiter__ = lambda: iter([mock_chunk])
+        async def async_iter():
+            yield mock_chunk
 
-        with patch.object(provider.client.responses, 'create', return_value=mock_stream):
+        mock_stream = MagicMock()
+        mock_stream.__aiter__ = async_iter
+
+        # モックされたclientを設定 - awaitableを返すように修正
+        async def mock_create(*args, **kwargs):
+            return mock_stream
+
+        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
 
@@ -70,10 +83,17 @@ class TestOpenAIProviderStreaming:
         mock_chunk = MagicMock()
         mock_chunk.usage = None
 
-        mock_stream = AsyncMock()
-        mock_stream.__aiter__ = lambda: iter([mock_chunk])
+        async def async_iter():
+            yield mock_chunk
 
-        with patch.object(provider.client.responses, 'create', return_value=mock_stream):
+        mock_stream = MagicMock()
+        mock_stream.__aiter__ = async_iter
+
+        # モックされたclientを設定 - awaitableを返すように修正
+        async def mock_create(*args, **kwargs):
+            return mock_stream
+
+        with patch.object(provider.client.responses, 'create', side_effect=mock_create):
             messages = [{"role": "user", "content": "test"}]
             result_generator = provider._stream_responses(messages, "gpt-4")
 
