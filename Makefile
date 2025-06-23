@@ -220,28 +220,28 @@ prod-pull-model:
 
 dev-test:
 	@echo "🧪 開発環境でテストを実行しています..."
-	docker compose exec backend poetry run pytest
+	docker compose exec backend bash -c "cd /src && PYTHONPATH=/src poetry run pytest"
 	@echo "✅ テスト実行完了"
 
 dev-lint:
 	@echo "🔍 開発環境でリンティングを実行しています..."
 	@echo "  📝 Black (コードフォーマット)..."
-	docker compose exec backend poetry run black --check --diff app/
+	docker compose exec backend poetry run black --check --diff app/ tests/
 	@echo "  📋 isort (import順序)..."
-	docker compose exec backend poetry run isort --check-only --diff app/
+	docker compose exec backend poetry run isort --check-only --diff app/ tests/
 	@echo "  🔎 flake8 (スタイル)..."
-	docker compose exec backend poetry run flake8 app/
+	docker compose exec backend poetry run flake8 app/ tests/
 	@echo "✅ リンティング完了"
 
 dev-mypy:
 	@echo "🔬 開発環境でmypy型チェックを実行しています..."
-	docker compose exec backend poetry run mypy app/
+	docker compose exec backend poetry run mypy app/ tests/
 	@echo "✅ 型チェック完了"
 
 dev-fix-format:
 	@echo "🔧 開発環境でコードフォーマットを修正しています..."
-	docker compose exec backend poetry run black app/
-	docker compose exec backend poetry run isort app/
+	docker compose exec backend poetry run black app/ tests/
+	docker compose exec backend poetry run isort app/ tests/
 	@echo "✅ コードフォーマット修正完了"
 
 # ========================================

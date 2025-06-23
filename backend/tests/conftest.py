@@ -1,18 +1,15 @@
-import pytest
-import pytest_asyncio
-import sys
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 from datetime import datetime, timezone
+from typing import Generator
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.db.session import get_db
+from app.main import app
 from app.models.base import Base
 from app.models.user import User
-from app.main import app
-from app.db.session import get_db
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
@@ -24,7 +21,7 @@ Base.metadata.create_all(bind=engine)
 
 
 @pytest.fixture
-def db():
+def db() -> Generator[Session, None, None]:
     """Database session for testing."""
     connection = engine.connect()
     transaction = connection.begin()
@@ -38,10 +35,10 @@ def db():
 
 
 @pytest.fixture
-def client(db):
+def client(db: Session) -> Generator[TestClient, None, None]:
     """FastAPI test client."""
 
-    def get_test_db():
+    def get_test_db() -> Session:
         return db
 
     app.dependency_overrides[get_db] = get_test_db
@@ -51,11 +48,10 @@ def client(db):
 
 
 @pytest.fixture
-def unverified_user(db):
+def unverified_user(db: Session) -> User:
     """Create an unverified user for testing."""
     user = User(
         email="unverified@example.com",
-        username="unverified_user",
         hashed_password="fake_hashed_password",
         is_verified=False,
         verification_token="fake_token",
@@ -68,11 +64,10 @@ def unverified_user(db):
 
 
 @pytest.fixture
-def verified_user(db):
+def verified_user(db: Session) -> User:
     """Create a verified user for testing."""
     user = User(
         email="verified@example.com",
-        username="verified_user",
         hashed_password="fake_hashed_password",
         is_verified=True,
         verification_token=None,

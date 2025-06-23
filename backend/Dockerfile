@@ -22,16 +22,17 @@ RUN if [ -f pyproject.toml ]; then poetry install --no-root; fi
 
 # アプリケーションコードをコピー
 COPY app app/
+COPY tests tests/
 
 # ★ ここでマイグレーション関連ファイルもコピー
 COPY migrations migrations/
 COPY alembic.ini .
 
-# コードフォーマットとリンティングのチェック
-RUN poetry run black --check --diff app/
-RUN poetry run isort --check-only --diff app/
-RUN poetry run flake8 app/
-RUN poetry run mypy app/
+# コードフォーマットとリンティングのチェック（testsフォルダも含める）
+RUN poetry run black --check --diff app/ tests/
+RUN poetry run isort --check-only --diff app/ tests/
+RUN poetry run flake8 app/ tests/
+RUN poetry run mypy app/ tests/
 
 # 権限の設定
 RUN chown -R appuser:appuser /src
