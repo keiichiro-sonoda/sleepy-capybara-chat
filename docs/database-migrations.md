@@ -493,6 +493,129 @@ make prod-restart-backend
    - マイグレーション適用後は必ず制約やデータベース構造の確認を実施する
    - アプリケーションレベルでの機能テスト（ユーザー削除など）も必須
 
+## マイグレーションチートシート
+
+よく使用するマイグレーション操作のクイックリファレンス：
+
+### 基本コマンド
+
+```bash
+# 新しいマイグレーションを自動生成
+docker compose exec backend poetry run alembic revision --autogenerate -m "説明"
+
+# マイグレーション履歴を確認
+docker compose exec backend poetry run alembic history --verbose
+
+# 現在のマイグレーション状態を確認
+docker compose exec backend poetry run alembic current
+
+# 最新までマイグレーションを適用
+docker compose exec backend poetry run alembic upgrade head
+
+# 特定のリビジョンまでマイグレーション
+docker compose exec backend poetry run alembic upgrade <revision_id>
+
+# マイグレーションを1つ戻す
+docker compose exec backend poetry run alembic downgrade -1
+
+# 実行されるSQLを確認（実際には実行しない）
+docker compose exec backend poetry run alembic upgrade head --sql
+```
+
+### 型変換マイグレーション
+
+PostgreSQLで型変換を行う場合の`USING`句の使用例：
+
+```python
+# VARCHAR → TIMESTAMP WITH TIME ZONE
+op.execute("""
+    ALTER TABLE users 
+    ALTER COLUMN reset_token_expires_at 
+    TYPE TIMESTAMP WITH TIME ZONE 
+    USING CASE 
+        WHEN reset_token_expires_at IS NULL OR reset_token_expires_at = '' THEN NULL
+        ELSE reset_token_expires_at::timestamp with time zone
+    END
+""")
+
+# TIMESTAMP → VARCHAR
+op.execute("""
+    ALTER TABLE users 
+    ALTER COLUMN reset_token_expires_at 
+    TYPE VARCHAR 
+    USING reset_token_expires_at::text
+""")
+
+# INTEGER → ENUM
+op.execute("""
+    ALTER TABLE table_name 
+    ALTER COLUMN column_name 
+    TYPE enum_type 
+    USING column_name::text::enum_type
+""")
+```
+
+### 外部キー制約の操作
+
+```python
+# CASCADE制約付きの外部キーを追加
+op.create_foreign_key(
+    'fk_name', 'source_table', 'target_table',
+    ['source_column'], ['target_column'],
+    ondelete='CASCADE'
+)
+
+# 外部キー制約を削除
+op.drop_constraint('fk_name', 'table_name', type_='foreignkey')
+```
+
+### インデックス操作
+
+```python
+# インデックスを作成
+op.create_index('ix_table_column', 'table_name', ['column_name'])
+
+# ユニークインデックスを作成
+op.create_index('ix_table_column', 'table_name', ['column_name'], unique=True)
+
+# インデックスを削除
+op.drop_index('ix_table_column', table_name='table_name')
+```
+
+### マイグレーションのベストプラクティス
+
+1. **自動生成後の確認**: `--autogenerate`で生成されたファイルは必ず手動確認
+2. **バックアップ**: 本番環境では事前にデータベースバックアップを取得
+3. **段階的適用**: 複数の変更がある場合は1つずつ適用して確認
+4. **downgrade関数**: 必ず実装してロールバック可能にする
+5. **USING句**: PostgreSQLで型変換時は明示的な変換ロジックを指定
+
+### トラブルシューティング
+
+```bash
+# マイグレーション履歴の不整合を修正
+docker compose exec backend poetry run alembic stamp head
+
+# 特定のリビジョンまで履歴を戻す
+docker compose exec backend poetry run alembic stamp <revision_id>
+
+# データベース制約を確認
+docker compose exec db psql -U postgres -d capybara_chat -c "
+SELECT constraint_name, table_name, column_name, 
+       foreign_table_name, delete_rule
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu USING (constraint_name)
+JOIN information_schema.constraint_column_usage ccu USING (constraint_name)
+JOIN information_schema.referential_constraints rc USING (constraint_name)
+WHERE tc.constraint_type = 'FOREIGN KEY';"
+
+# カラムの型を確認
+docker compose exec db psql -U postgres -d capybara_chat -c "
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'table_name';"
+```
+
 ## 参考リソース
 
 - [Alembic公式ドキュメント](https://alembic.sqlalchemy.org/)
