@@ -622,6 +622,18 @@ docker compose exec db psql -U postgres -d capybara_chat -c "
 SELECT column_name, data_type 
 FROM information_schema.columns 
 WHERE table_name = 'table_name';"
+
+# PRでマイグレーション修正後の対応
+# 1. 現在の状態確認
+docker compose exec backend poetry run alembic current
+
+# 2. データベースの実際の型確認
+docker compose exec db psql -U postgres -d capybara_chat -c "
+SELECT column_name, data_type FROM information_schema.columns 
+WHERE table_name = 'users' AND column_name = 'target_column';"
+
+# 3. 必要に応じてマイグレーション再適用
+# （既に適用済みなら何もしない、未適用なら upgrade head）
 ```
 
 ## 参考リソース
