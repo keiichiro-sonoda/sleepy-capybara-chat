@@ -51,13 +51,21 @@ AVAILABLE_MODELS: list[AIModel] = [
         default_limit_period_unit=PeriodUnit.DAY,
         default_limit_period_value=1,
     ),
+    AIModel(
+        id=AIModelId.GPT_5_NANO,
+        name="GPT-5 Nano",
+        provider="openai",
+        thinking_mode="none",
+        effective_token_ratio=4.0,
+        default_limit_value=2000000,
+        default_limit_period_unit=PeriodUnit.DAY,
+        default_limit_period_value=1,
+    ),
     # 他のモデルも同様にAIModelインスタンスとして追加
 ]
 
-# デフォルトモデルを最初のモデルに設定
-DEFAULT_MODEL_ID: AIModelId = (
-    AVAILABLE_MODELS[0].id if AVAILABLE_MODELS else AIModelId.QWEN3_8B
-)
+# デフォルトモデルを GPT-5 Nano に設定（未定義時は Qwen3 8B）
+DEFAULT_MODEL_ID: AIModelId = AIModelId.GPT_5_NANO if AVAILABLE_MODELS else AIModelId.QWEN3_8B
 DEFAULT_MODEL: str = DEFAULT_MODEL_ID.value
 
 

@@ -183,6 +183,11 @@ Internet → Cloudflare → Tunnel → nginx:80 → frontend:3000/backend:8000
 - 外部アクセス: Cloudflare Tunnel
 - リバースプロキシ: Nginx（現在未使用）
 
+## 対応モデル
+
+- OpenAI: `GPT-4.1 Nano`, `GPT-5 Nano`
+- Ollama: `Qwen3 8B`
+
 ## ライセンス
 
 MIT License

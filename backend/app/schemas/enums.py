@@ -15,4 +15,5 @@ class PeriodUnit(str, PyEnum):
 class AIModelId(PyEnum):
     QWEN3_8B = "qwen3:8b"
     GPT_4_1_NANO = "gpt-4.1-nano"
+    GPT_5_NANO = "gpt-5-nano"
     # 他のモデルもAVAILABLE_MODELSに合わせてここに追加
